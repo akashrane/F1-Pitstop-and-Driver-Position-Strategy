@@ -63,7 +63,7 @@ To verify model performance, a synthetic validation set was generated based on r
 - Reliable correlation between **pit stop timing** and position shifts  
 - Sensitivity to **lap-by-lap weather fluctuations**
 
-📄 [Read the full Validation Report](F1-Pitstop-and-Driver-Position-Strategy/F1_Position_Predictor/Reports/Validation_Report_F1_Position_Change.md)
+📄 [Read the full Validation Report](/F1_Position_Predictor/Reports/Validation_Report_F1_Position_Change.md)
 
 ---
 
