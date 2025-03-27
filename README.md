@@ -1,92 +1,96 @@
-🏎️ F1 Position Change Predictor 🏎️ 
+# 🏎️ F1 Position Change Predictor 🏁  
+Predicting driver **position changes** in Formula 1 using real-time telemetry, tire strategy, and weather data.
 
-Predict driver **position changes** during an F1 race using weather, tire, and race telemetry data. This project leverages advanced machine learning models like **XGBoost** and **Random Forest** to analyze driver behavior and pit strategy patterns.
-
----
-
-## Author
-- Akash Rane
-- Master’s in Computer Science
-- Pace University
-- Linkden
+This project leverages machine learning models like **XGBoost** and **Random Forest** to understand the impact of pit stop strategy, driver behavior, and environmental conditions on race outcomes.
 
 ---
 
----
-
-##  Project Overview
-
-Modern F1 races generate massive amounts of telemetry and weather data. This project aims to:
--  Analyze factors like tire usage, weather, and pit times
--  Predict driver **position changes**
--  Use **machine learning** models for predictive insight
--  Validate predictions using custom datasets
--  Build an **interactive dashboard** (in-progress)
-
----
-## Key libraries:
-
-- xgboost
-- pandas, numpy
-- matplotlib, seaborn
-- scikit-learn
+## 👨‍💻 Author  
+**Akash Rane**  
+Master’s in Computer Science | Pace University  
+[LinkedIn](https://www.linkedin.com/in/akashrane/) | [Portfolio](https://akashrane.github.io/website/) 
 
 ---
 
-##  Features Used
+## 📌 Project Overview  
+Modern Formula 1 races generate huge amounts of data from sensors, weather feeds, and driver telemetry. This project dives into that data to:
 
-Final features selected for prediction:
-- `Laps`
-- `Fast Lap Attempts`
-- `Driver Aggression Score`
-- `Tire Usage Aggression`
-- `AvgPitStopTime`
-- `Lap Time Variation`
-- `Pit_Time`
-- `Total Pit Stops`
-- `Driver` (encoded)
+- Predict **driver position changes** during a race  
+- Analyze key factors like **tire compounds**, **aggressiveness**, **weather**, and **pit stops**  
+- Train and validate predictive models using historical race data (1950–2024)  
+- Visualize insights and build an upcoming **interactive dashboard**
 
 ---
 
-##  Models & Performance
+## 🛠️ Tech Stack & Libraries  
 
-| Model               | MAE     | RMSE    | R² Score |
-|--------------------|---------|---------|----------|
-| Linear Regression   | 0.0273  | 0.0532  | 0.954    |
-| Random Forest       | 0.0548  | 0.0813  | 0.892    |
-| Gradient Boosting   | 0.1301  | 0.1600  | 0.584    |
-| **XGBoost (best)**  | 0.0330  | 0.0588  | **0.944** |
-
- Hyperparameter tuning improved the model significantly.
+- **Python**, **Pandas**, **NumPy**  
+- **XGBoost**, **Random Forest**, **Linear Regression**  
+- **Matplotlib**, **Seaborn**, **scikit-learn**  
+- **APIs**: Ergast, Open-Meteo, FastF1  
+- **Web Scraping**: Selenium
 
 ---
 
-## Validation Results
+## 🧪 Feature Engineering  
+Selected predictive features include:
 
-We used a synthetic dataset to validate the model’s output. The predicted values were consistent and correlated with expected patterns based on:
-- **Aggressive driving behavior**
-- **Pit strategy**
-- **Lap dynamics**
-
- See the full [Validation Report](reports/validation_report.ipynb)
-
----
-
-## Upcoming Dashboard
-
-I am developing a **Streamlit-based interactive dashboard** to:
-- Upload new race data
-- Predict position changes on the fly
-- Visualize driver behavior and impact
-
-Stay tuned — it will go in `/dashboard/`.
+- `Laps`, `Fast Lap Attempts`, `Lap Time Variation`  
+- `AvgPitStopTime`, `Pit Time`, `Total Pit Stops`  
+- `Driver Aggression Score`, `Tire Usage Aggression`  
+- Encoded categorical values like `Driver`, `Tire Compound`
 
 ---
 
-## Acknowledgements
-- Formula 1 telemetry data
-- Kaggle weather datasets
-- Seaborn, scikit-learn & XGBoost
+## 📈 Model Comparison
+
+| Model                | MAE     | RMSE    | R² Score |
+|---------------------|---------|---------|----------|
+| Linear Regression    | 0.0273  | 0.0532  | 0.954    |
+| Random Forest        | 0.0548  | 0.0813  | 0.892    |
+| Gradient Boosting    | 0.1301  | 0.1600  | 0.584    |
+| **XGBoost (Best)**   | 0.0330  | 0.0588  | **0.944** |
+
+*XGBoost outperformed others post hyperparameter tuning.*
 
 ---
 
+## ✅ Model Validation  
+
+To verify model performance, a synthetic validation set was generated based on real-world behavior. Key validation highlights:
+
+- Accurate reflection of **aggressive driving patterns**  
+- Reliable correlation between **pit stop timing** and position shifts  
+- Sensitivity to **lap-by-lap weather fluctuations**
+
+📄 [Read the full Validation Report](F1-Pitstop-and-Driver-Position-Strategy/F1_Position_Predictor/Reports/Validation_Report_F1_Position_Change.md)
+
+---
+
+## 🧾 Data Pipeline  
+This project combines multiple data sources and APIs into a single dataset:
+
+- 🛠️ **Race Results & Pit Stops** – Ergast API (1950–2024)  
+- 🌡️ **Hourly Weather** – Open-Meteo (city + date-based retrieval)  
+- 🧪 **Tire Strategy & Aggression** – FastF1 telemetry and stint tracking  
+- 🕐 **Schedule & Timing** – Ergast + Selenium scraping for edge cases
+
+---
+
+## 📊 Upcoming Feature: Interactive Dashboard  
+🚧 **In Progress** – A **Streamlit** dashboard to:
+
+- Upload new race data  
+- Predict position changes on the fly  
+- Visualize the influence of tire strategies and weather  
+
+🗂️ Will be added to `/dashboard/` soon.
+
+---
+
+## 🙌 Acknowledgements  
+
+- Formula 1 Open Telemetry & FastF1  
+- Kaggle & Open-Meteo weather APIs  
+- scikit-learn, XGBoost, Matplotlib, Seaborn  
+- Ergast Developer API for historical F1 race data
