@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pit_events.schema.json",
+  "title": "Pit events",
+  "description": "One observed pit-lane visit. Primary key: session_key, driver_id, stop_number.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["season", "round_number", "session_key", "driver_id", "stop_number", "lap_number", "source", "source_url", "retrieved_at_utc", "validation_status"],
+  "properties": {
+    "season": {"type": "integer", "minimum": 1950, "x-role": "identifier"},
+    "round_number": {"type": "integer", "minimum": 1, "x-role": "identifier"},
+    "session_key": {"type": ["integer", "null"], "x-role": "identifier"},
+    "driver_id": {"type": "string", "minLength": 1, "x-role": "identifier"},
+    "stop_number": {"type": "integer", "minimum": 1, "x-role": "identifier"},
+    "lap_number": {"type": "integer", "minimum": 1, "x-feature-time": "live"},
+    "pit_duration_s": {"type": ["number", "null"], "exclusiveMinimum": 0, "x-feature-time": "live", "x-unit": "seconds"},
+    "stop_duration_s": {"type": ["number", "null"], "exclusiveMinimum": 0, "x-feature-time": "live", "x-unit": "seconds"},
+    "driver_laps_completed": {"type": ["integer", "null"], "minimum": 0, "x-feature-time": "post_race"},
+    "source": {"type": "string", "enum": ["jolpica", "openf1", "fastf1"]},
+    "source_url": {"type": "string", "format": "uri"},
+    "retrieved_at_utc": {"type": "string", "format": "date-time"},
+    "validation_status": {"type": "string", "enum": ["verified", "warning", "quarantined", "unavailable"]}
+  }
+}
