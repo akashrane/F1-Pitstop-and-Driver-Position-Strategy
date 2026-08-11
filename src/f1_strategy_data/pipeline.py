@@ -12,6 +12,7 @@ from .normalize import (
     driver_number_map,
     jolpica_race,
     normalize_pit_events,
+    normalize_jolpica_pit_events,
     normalize_race_drivers,
     normalize_stints,
     normalize_weather,
@@ -56,7 +57,10 @@ def build_reference_race(season: int, round_number: int, session_key: int, root:
     tables = {
         "race_drivers": race_drivers,
         "stints": normalize_stints(payloads["openf1_stints"], identifiers, season, round_number, **provenance["openf1_stints"]),
-        "pit_events": normalize_pit_events(payloads["openf1_pits"], identifiers, completed_laps, season, round_number, **provenance["openf1_pits"]),
+        "pit_events": normalize_jolpica_pit_events(
+            payloads["jolpica_pits"], payloads["openf1_pits"], identifiers, completed_laps,
+            season, round_number, session_key, **provenance["jolpica_pits"]
+        ),
         "weather_observations": normalize_weather(payloads["openf1_weather"], season, round_number, **provenance["openf1_weather"]),
     }
 
@@ -67,7 +71,11 @@ def build_reference_race(season: int, round_number: int, session_key: int, root:
     issue_records.extend(issue.__dict__ | {"table": "stints"} for issue in stint_issues(tables["stints"]))
     issue_records.extend(issue.__dict__ | {"table": "weather_observations"} for issue in weather_issues(tables["weather_observations"]))
     issue_records.extend({"severity": "error", "code": "result_position_mismatch", "table": "race_drivers", **item} for item in result_mismatches)
-    issue_records.extend(_pit_count_mismatches(payloads["jolpica_pits"], tables["pit_events"]))
+    openf1_pits = normalize_pit_events(
+        payloads["openf1_pits"], identifiers, completed_laps, season, round_number,
+        **provenance["openf1_pits"]
+    )
+    issue_records.extend(_pit_count_mismatches(payloads["jolpica_pits"], openf1_pits))
 
     for name, rows in tables.items():
         _write_csv(processed_dir / f"{name}.csv", rows)
