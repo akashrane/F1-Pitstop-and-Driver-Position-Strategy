@@ -1,4 +1,4 @@
-from f1_strategy_data.validation import duplicate_key_issues, pit_stop_issues, weather_issues
+from f1_strategy_data.validation import duplicate_key_issues, pit_stop_issues, stint_issues, weather_issues
 
 
 def test_duplicate_primary_key_is_reported():
@@ -21,3 +21,11 @@ def test_timestamp_and_ranges_are_validated():
 def test_pit_lap_cannot_exceed_completed_laps():
     rows = [{"lap_number": 20, "driver_laps_completed": 12}]
     assert [issue.code for issue in pit_stop_issues(rows)] == ["pit_after_retirement"]
+
+
+def test_stints_cannot_overlap():
+    rows = [
+        {"session_key": 1, "driver_id": "driver", "lap_start": 1, "lap_end": 20},
+        {"session_key": 1, "driver_id": "driver", "lap_start": 20, "lap_end": 30},
+    ]
+    assert [issue.code for issue in stint_issues(rows)] == ["overlapping_stints"]

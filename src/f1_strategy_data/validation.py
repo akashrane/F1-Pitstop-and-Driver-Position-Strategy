@@ -58,6 +58,28 @@ def pit_stop_issues(rows: Iterable[Mapping[str, object]]) -> list[ValidationIssu
     return issues
 
 
+def stint_issues(rows: Iterable[Mapping[str, object]]) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    by_driver: dict[tuple[object, object], list[tuple[int, int, int]]] = {}
+    for index, row in enumerate(rows, start=2):
+        start = _integer(row.get("lap_start"))
+        end = _integer(row.get("lap_end"))
+        if start is None or end is None:
+            issues.append(ValidationIssue("error", "missing_stint_boundary", "Stint boundaries are required", index))
+            continue
+        if end < start:
+            issues.append(ValidationIssue("error", "invalid_stint_boundary", f"Stint ends on lap {end} before lap {start}", index))
+        key = (row.get("session_key"), row.get("driver_id"))
+        by_driver.setdefault(key, []).append((start, end, index))
+    for key, spans in by_driver.items():
+        previous_end: int | None = None
+        for start, end, index in sorted(spans):
+            if previous_end is not None and start <= previous_end:
+                issues.append(ValidationIssue("error", "overlapping_stints", f"Overlapping stint for {key!r}", index))
+            previous_end = max(previous_end or end, end)
+    return issues
+
+
 def _number(value: object) -> float | None:
     if value in (None, ""):
         return None
