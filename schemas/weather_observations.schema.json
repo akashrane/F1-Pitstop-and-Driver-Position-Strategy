@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "weather_observations.schema.json",
+  "title": "Trackside weather observations",
+  "description": "One trackside observation. Primary key: session_key, observed_at_utc, weather_source.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["season", "round_number", "session_key", "observed_at_utc", "weather_source", "source_url", "retrieved_at_utc", "validation_status"],
+  "properties": {
+    "season": {"type": "integer", "minimum": 1950, "x-role": "identifier"},
+    "round_number": {"type": "integer", "minimum": 1, "x-role": "identifier"},
+    "session_key": {"type": "integer", "x-role": "identifier"},
+    "observed_at_utc": {"type": "string", "format": "date-time", "x-role": "identifier"},
+    "air_temperature_c": {"type": ["number", "null"], "minimum": -20, "maximum": 60, "x-unit": "celsius", "x-feature-time": "live"},
+    "track_temperature_c": {"type": ["number", "null"], "minimum": -20, "maximum": 90, "x-unit": "celsius", "x-feature-time": "live"},
+    "humidity_pct": {"type": ["number", "null"], "minimum": 0, "maximum": 100, "x-unit": "percent", "x-feature-time": "live"},
+    "pressure_mbar": {"type": ["number", "null"], "minimum": 800, "maximum": 1100, "x-unit": "millibar", "x-feature-time": "live"},
+    "rainfall": {"type": ["boolean", "null"], "x-feature-time": "live"},
+    "wind_direction_deg": {"type": ["integer", "null"], "minimum": 0, "maximum": 359, "x-unit": "degrees", "x-feature-time": "live"},
+    "wind_speed_ms": {"type": ["number", "null"], "minimum": 0, "x-unit": "metres_per_second", "x-feature-time": "live"},
+    "weather_source": {"type": "string", "enum": ["openf1", "fastf1"], "x-role": "identifier"},
+    "source_url": {"type": "string", "format": "uri"},
+    "retrieved_at_utc": {"type": "string", "format": "date-time"},
+    "validation_status": {"type": "string", "enum": ["verified", "warning", "quarantined", "unavailable"]}
+  }
+}
