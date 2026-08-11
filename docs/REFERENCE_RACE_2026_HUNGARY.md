@@ -18,7 +18,7 @@ The build intentionally maps OpenF1 records using the car number used at the eve
 |---|---:|
 | `race_drivers` | 22 |
 | `stints` | 67 |
-| `pit_events` | 44 |
+| `pit_events` | 45 |
 | `weather_observations` | 156 |
 
 All 22 classified positions agree between Jolpica and OpenF1. Canonical primary keys are unique, stint boundaries do not overlap, pit laps do not exceed the driver's completed laps, and weather observations pass range and timestamp validation.
@@ -30,7 +30,7 @@ The race remains `warning`, not fully verified, because the pit sources disagree
 - Jolpica: 3 pit events
 - OpenF1: 2 pit events
 
-The pipeline preserves the OpenF1 table and records the discrepancy in `validation_report.json`; it does not silently choose a value. This event must be reconciled against another timing source before the race is approved for publication or modeling.
+FastF1 independently shows three pit-ins on laps 17, 39, and 56, matching Jolpica. The canonical table therefore retains all three Jolpica events and uses OpenF1 only to enrich events it contains. The missing OpenF1 record remains visible in `validation_report.json`; source disagreement is never silently discarded.
 
 ## Reproduce
 
