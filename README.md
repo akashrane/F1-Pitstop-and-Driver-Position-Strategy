@@ -81,6 +81,25 @@ when intentionally taking new source snapshots. Each run writes a manifest;
 warning and quarantined races remain available for investigation but are
 excluded from the model-ready consolidated tables.
 
+## Automated updates
+
+`.github/workflows/update-dataset.yml` runs every Tuesday at 06:17 UTC, after
+the usual race weekend, and can also be started manually. It tests the code,
+builds completed races, rejects failed or empty releases, uploads the verified
+files as a GitHub Actions artifact, and publishes a Kaggle version on scheduled
+runs. Warning and quarantined races are visible in the manifest but are not
+included in the published CSV files.
+
+Configure these GitHub repository settings before enabling publication:
+
+- Actions secrets: `KAGGLE_USERNAME` and `KAGGLE_KEY`
+- Actions variable: `KAGGLE_DATASET_SLUG`, for example
+  `akashrane2609/formula-1-pit-stop-dataset`
+
+The Kaggle dataset must already exist. For a first publication, run
+`kaggle datasets create -p release/kaggle` locally once; later workflow runs
+create versions with `kaggle datasets version`.
+
 ## Planned modeling approach
 
 - Pit-stop count: count or classification model using only information known at prediction time.
