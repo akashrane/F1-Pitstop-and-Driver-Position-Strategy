@@ -1,6 +1,7 @@
 from f1_strategy_data.normalize import (
     driver_number_map,
     normalize_pit_events,
+    normalize_jolpica_pit_events,
     normalize_stints,
     normalize_weather,
 )
@@ -34,3 +35,13 @@ def test_openf1_tables_use_canonical_units_and_ids():
     assert stints[0]["driver_id"] == "norris"
     assert pits[0]["pit_duration_s"] == 21.2
     assert weather[0]["wind_speed_ms"] == 3.2
+
+
+def test_jolpica_pit_event_is_kept_when_openf1_event_is_missing():
+    payload = {"MRData": {"RaceTable": {"Races": [{"PitStops": [
+        {"driverId": "norris", "lap": "56", "stop": "3", "duration": "21.878"}
+    ]}]}}}
+    rows = normalize_jolpica_pit_events(payload, [], {1: "norris"}, {"norris": 70}, 2026, 11, 1, **PROVENANCE)
+    assert len(rows) == 1
+    assert rows[0]["pit_duration_s"] == 21.878
+    assert rows[0]["validation_status"] == "warning"
