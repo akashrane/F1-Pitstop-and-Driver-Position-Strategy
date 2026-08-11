@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "race_drivers.schema.json",
+  "title": "Race drivers",
+  "description": "One driver in one Formula 1 race. Primary key: season, round_number, driver_id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["season", "round_number", "session_key", "driver_id", "classified_position", "status", "source", "source_url", "retrieved_at_utc", "validation_status"],
+  "properties": {
+    "season": {"type": "integer", "minimum": 1950, "x-role": "identifier"},
+    "round_number": {"type": "integer", "minimum": 1, "x-role": "identifier"},
+    "session_key": {"type": ["integer", "null"], "x-role": "identifier"},
+    "driver_id": {"type": "string", "minLength": 1, "x-role": "identifier"},
+    "driver_name": {"type": "string", "minLength": 1, "x-feature-time": "pre_race"},
+    "constructor_id": {"type": ["string", "null"], "x-feature-time": "pre_race"},
+    "grid_position": {"type": ["integer", "null"], "minimum": 0, "x-feature-time": "pre_race"},
+    "classified_position": {"type": ["integer", "null"], "minimum": 1, "x-feature-time": "post_race", "x-target": true},
+    "laps_completed": {"type": ["integer", "null"], "minimum": 0, "x-feature-time": "post_race"},
+    "status": {"type": "string", "minLength": 1, "x-feature-time": "post_race"},
+    "source": {"type": "string", "enum": ["fia", "jolpica", "openf1", "fastf1"]},
+    "source_url": {"type": "string", "format": "uri"},
+    "retrieved_at_utc": {"type": "string", "format": "date-time"},
+    "validation_status": {"type": "string", "enum": ["verified", "warning", "quarantined", "unavailable"]}
+  }
+}
