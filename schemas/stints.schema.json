@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stints.schema.json",
+  "title": "Tyre stints",
+  "description": "One continuous tyre stint. Primary key: session_key, driver_id, stint_number.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["season", "round_number", "session_key", "driver_id", "stint_number", "lap_start", "lap_end", "source", "source_url", "retrieved_at_utc", "validation_status"],
+  "properties": {
+    "season": {"type": "integer", "minimum": 1950, "x-role": "identifier"},
+    "round_number": {"type": "integer", "minimum": 1, "x-role": "identifier"},
+    "session_key": {"type": "integer", "x-role": "identifier"},
+    "driver_id": {"type": "string", "minLength": 1, "x-role": "identifier"},
+    "stint_number": {"type": "integer", "minimum": 1, "x-role": "identifier"},
+    "compound": {"type": ["string", "null"], "x-feature-time": "live"},
+    "lap_start": {"type": "integer", "minimum": 1, "x-feature-time": "live"},
+    "lap_end": {"type": "integer", "minimum": 1, "x-feature-time": "live"},
+    "tyre_age_at_start_laps": {"type": ["integer", "null"], "minimum": 0, "x-feature-time": "live"},
+    "source": {"type": "string", "enum": ["openf1", "fastf1"]},
+    "source_url": {"type": "string", "format": "uri"},
+    "retrieved_at_utc": {"type": "string", "format": "date-time"},
+    "validation_status": {"type": "string", "enum": ["verified", "warning", "quarantined", "unavailable"]}
+  }
+}

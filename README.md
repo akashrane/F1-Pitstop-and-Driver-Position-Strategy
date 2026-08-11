@@ -1,96 +1,83 @@
-# 🏎️ F1 Position Change Predictor 🏁  
-Predicting driver **position changes** in Formula 1 using real-time telemetry, tire strategy, and weather data.
+# F1 Pit-Stop and Driver Position Strategy
 
-This project leverages machine learning models like **XGBoost** and **Random Forest** to understand the impact of pit stop strategy, driver behavior, and environmental conditions on race outcomes.
+An accuracy-first data and modeling project for two Formula 1 prediction tasks:
 
----
+1. When and how often a driver will pit.
+2. Where a driver will finish the race.
 
-## 👨‍💻 Author  
-**Akash Rane**  
-Master’s in Computer Science | Pace University  
-[LinkedIn](https://www.linkedin.com/in/akashrane/) | [Portfolio](https://akashrane.github.io/website/) 
+The repository is being upgraded from its original 1950â€“2024 experimental pipeline to a reproducible pipeline covering completed races through 2026.
 
----
+## Current status
 
-## 📌 Project Overview  
-Modern Formula 1 races generate huge amounts of data from sensors, weather feeds, and driver telemetry. This project dives into that data to:
+The files under `F1_Position_Predictor/Formula1_Data` and `F1_Data_Scrapping/Data_Retived` are retained as **legacy artifacts**. They are useful for tracing the original project, but they are not yet certified as model-ready.
 
-- Predict **driver position changes** during a race  
-- Analyze key factors like **tire compounds**, **aggressiveness**, **weather**, and **pit stops**  
-- Train and validate predictive models using historical race data (1950–2024)  
-- Visualize insights and build an upcoming **interactive dashboard**
+The audit identified important limitations:
 
----
+- Historical source gaps were sometimes represented as zero pit stops instead of unavailable values.
+- Open-Meteo soil temperature was labeled as F1 track temperature.
+- Full-day hourly weather was interpolated across race laps without using actual lap timestamps.
+- Some generated features were random or synthetic.
+- Several files contain character-encoding corruption.
+- The original validation used synthetic data and may contain target leakage.
 
-## 🛠️ Tech Stack & Libraries  
+Do not use legacy model scores as production-quality benchmarks until the rebuilt datasets and chronological evaluation are complete.
 
-- **Python**, **Pandas**, **NumPy**  
-- **XGBoost**, **Random Forest**, **Linear Regression**  
-- **Matplotlib**, **Seaborn**, **scikit-learn**  
-- **APIs**: Ergast, Open-Meteo, FastF1  
-- **Web Scraping**: Selenium
+## Accuracy policy
 
----
+- FIA final classifications are authoritative for official race outcomes.
+- FastF1/OpenF1 trackside timing data is preferred for laps, stints, pits, race control, and weather.
+- Jolpica replaces the retired Ergast API for schedules, results, and available historical pit stops.
+- Open-Meteo is contextual off-track weather only; it is not a source of measured track temperature.
+- Missing source coverage remains null and is accompanied by a validation status.
+- Raw source responses are immutable and carry retrieval metadata.
 
-## 🧪 Feature Engineering  
-Selected predictive features include:
+See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for the full policy.
 
-- `Laps`, `Fast Lap Attempts`, `Lap Time Variation`  
-- `AvgPitStopTime`, `Pit Time`, `Total Pit Stops`  
-- `Driver Aggression Score`, `Tire Usage Aggression`  
-- Encoded categorical values like `Driver`, `Tire Compound`
+## Canonical datasets
 
----
+The rebuilt pipeline produces separate tables instead of one ambiguous merged file:
 
-## 📈 Model Comparison
+| Table | Grain | Purpose |
+|---|---|---|
+| `race_drivers` | Driver Ã— race | Starting conditions, official result, and finishing-position target |
+| `stints` | Driver Ã— continuous tyre stint | Compound, tyre age, stint boundaries, and degradation |
+| `pit_events` | Driver Ã— pit-lane visit | Pit lap, duration, and surrounding race state |
+| `weather_observations` | Session Ã— observation timestamp | Trackside air/track temperature, humidity, rainfall, pressure, and wind |
 
-| Model                | MAE     | RMSE    | R² Score |
-|---------------------|---------|---------|----------|
-| Linear Regression    | 0.0273  | 0.0532  | 0.954    |
-| Random Forest        | 0.0548  | 0.0813  | 0.892    |
-| Gradient Boosting    | 0.1301  | 0.1600  | 0.584    |
-| **XGBoost (Best)**   | 0.0330  | 0.0588  | **0.944** |
+Every field used for modeling will be tagged as `pre_race`, `live`, or `post_race` to prevent target leakage.
 
-*XGBoost outperformed others post hyperparameter tuning.*
+## Repository layout
 
----
+```text
+src/f1_strategy_data/   Source clients and validation logic
+scripts/                Auditing and pipeline entry points
+tests/                  Automated data-quality tests
+docs/                   Source and methodology documentation
+F1_Position_Predictor/  Legacy notebook, model, reports, and datasets
+F1_Data_Scrapping/      Legacy collection scripts and retrieved data
+```
 
-## ✅ Model Validation  
+## Development
 
-To verify model performance, a synthetic validation set was generated based on real-world behavior. Key validation highlights:
+The validation foundation uses the Python standard library. Run:
 
-- Accurate reflection of **aggressive driving patterns**  
-- Reliable correlation between **pit stop timing** and position shifts  
-- Sensitivity to **lap-by-lap weather fluctuations**
+```powershell
+python -m pytest -q
+python scripts/audit_legacy_data.py `
+  F1_Position_Predictor/Formula1_Data/f1_pitstops_2018_2024.csv
+```
 
-📄 [Read the full Validation Report](/F1_Position_Predictor/Reports/Validation_Report_F1_Position_Change.md)
+The source clients currently expose Jolpica results/pit stops and OpenF1 session endpoints while retaining source URL and retrieval time.
 
----
+## Planned modeling approach
 
-## 🧾 Data Pipeline  
-This project combines multiple data sources and APIs into a single dataset:
+- Pit-stop count: count or classification model using only information known at prediction time.
+- Next pit lap: survival/hazard or lap-level classification model.
+- Finishing position: ranking or ordinal model evaluated on future races/seasons.
+- 2026 is treated as a separate regulation era to account for concept drift.
 
-- 🛠️ **Race Results & Pit Stops** – Ergast API (1950–2024)  
-- 🌡️ **Hourly Weather** – Open-Meteo (city + date-based retrieval)  
-- 🧪 **Tire Strategy & Aggression** – FastF1 telemetry and stint tracking  
-- 🕐 **Schedule & Timing** – Ergast + Selenium scraping for edge cases
+Random row splits and synthetic validation will be replaced by chronological race and season holdouts.
 
----
+## Author
 
-## 📊 Upcoming Feature: Interactive Dashboard  
-🚧 **In Progress** – A **Streamlit** dashboard to:
-
-- Upload new race data  
-- Predict position changes on the fly  
-- Visualize the influence of tire strategies and weather  
-
-🗂️ Will be added to `/dashboard/` soon.
-
----
-
-## 🙌 Acknowledgements  
-
-- Formula 1 Open Telemetry & FastF1  
-- Kaggle & Open-Meteo weather APIs  
-- scikit-learn, XGBoost, Matplotlib, Seaborn  
-- Ergast Developer API for historical F1 race data
+Akash Rane â€” [LinkedIn](https://www.linkedin.com/in/akashrane/) Â· [Portfolio](https://akashrane.github.io/website/)

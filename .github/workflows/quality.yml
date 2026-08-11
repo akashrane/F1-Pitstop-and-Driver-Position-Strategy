@@ -1,0 +1,27 @@
+name: Data quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest
+      - name: Compile source
+        run: python -m compileall -q src scripts
+      - name: Run tests
+        run: python -m pytest -q
