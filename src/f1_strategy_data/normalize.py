@@ -125,6 +125,47 @@ def normalize_pit_events(
     return output
 
 
+def normalize_jolpica_pit_events(
+    jolpica_payload: dict[str, Any],
+    openf1_rows: Iterable[dict[str, Any]],
+    identifiers: dict[int, str],
+    completed_laps: dict[str, int | None],
+    season: int,
+    round_number: int,
+    session_key: int,
+    source_url: str,
+    retrieved_at_utc: str,
+) -> list[dict[str, Any]]:
+    races = jolpica_payload.get("MRData", {}).get("RaceTable", {}).get("Races", [])
+    jolpica_rows = races[0].get("PitStops", []) if races else []
+    openf1_by_key: dict[tuple[str, int], dict[str, Any]] = {}
+    for row in openf1_rows:
+        driver_id = identifiers.get(int(row["driver_number"]))
+        if driver_id is not None:
+            openf1_by_key[(driver_id, int(row["lap_number"]))] = row
+    output: list[dict[str, Any]] = []
+    for row in jolpica_rows:
+        driver_id = row["driverId"]
+        lap_number = int(row["lap"])
+        enrichment = openf1_by_key.get((driver_id, lap_number), {})
+        output.append({
+            "season": season,
+            "round_number": round_number,
+            "session_key": session_key,
+            "driver_id": driver_id,
+            "stop_number": int(row["stop"]),
+            "lap_number": lap_number,
+            "pit_duration_s": _optional_float(enrichment.get("pit_duration") or enrichment.get("lane_duration") or row.get("duration")),
+            "stop_duration_s": _optional_float(enrichment.get("stop_duration")),
+            "driver_laps_completed": completed_laps.get(driver_id),
+            "source": "jolpica",
+            "source_url": source_url,
+            "retrieved_at_utc": retrieved_at_utc,
+            "validation_status": "verified" if enrichment else "warning",
+        })
+    return output
+
+
 def normalize_weather(
     source_rows: Iterable[dict[str, Any]],
     season: int,
