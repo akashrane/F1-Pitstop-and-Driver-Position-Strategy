@@ -29,7 +29,13 @@ TABLE_KEYS = {
 }
 
 
-def build_reference_race(season: int, round_number: int, session_key: int, root: Path) -> dict[str, Any]:
+def build_reference_race(
+    season: int,
+    round_number: int,
+    session_key: int,
+    root: Path,
+    refresh: bool = False,
+) -> dict[str, Any]:
     raw_dir = root / "raw" / str(season) / f"round-{round_number:02d}"
     processed_dir = root / "processed" / str(season) / f"round-{round_number:02d}"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -45,8 +51,7 @@ def build_reference_race(season: int, round_number: int, session_key: int, root:
         "openf1_pits": lambda: openf1("pit", session_key=session_key),
         "openf1_weather": lambda: openf1("weather", session_key=session_key),
     }.items():
-        payloads[name], provenance[name] = loader()
-        _write_json(raw_dir / f"{name}.json", payloads[name])
+        payloads[name], provenance[name] = _load_or_fetch(raw_dir, name, loader, refresh)
 
     race = jolpica_race(payloads["jolpica_results"])
     identifiers = driver_number_map(race)
@@ -95,6 +100,20 @@ def build_reference_race(season: int, round_number: int, session_key: int, root:
     }
     _write_json(processed_dir / "validation_report.json", report)
     return report
+
+
+def _load_or_fetch(raw_dir: Path, name: str, loader: Any, refresh: bool) -> tuple[Any, dict[str, str]]:
+    payload_path = raw_dir / f"{name}.json"
+    provenance_path = raw_dir / f"{name}.provenance.json"
+    if not refresh and payload_path.exists() and provenance_path.exists():
+        return (
+            json.loads(payload_path.read_text(encoding="utf-8")),
+            json.loads(provenance_path.read_text(encoding="utf-8")),
+        )
+    payload, provenance = loader()
+    _write_json(payload_path, payload)
+    _write_json(provenance_path, provenance)
+    return payload, provenance
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:

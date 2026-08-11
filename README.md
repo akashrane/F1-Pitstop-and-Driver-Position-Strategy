@@ -69,6 +69,18 @@ python scripts/audit_legacy_data.py `
 
 The source clients currently expose Jolpica results/pit stops and OpenF1 session endpoints while retaining source URL and retrieval time.
 
+Build every completed race in a season range and create verified-only consolidated tables:
+
+```powershell
+$env:PYTHONPATH = "src"
+python scripts/build_seasons.py --start-year 2023 --end-year 2026
+```
+
+Raw responses and their provenance are cached per race. Use `--refresh` only
+when intentionally taking new source snapshots. Each run writes a manifest;
+warning and quarantined races remain available for investigation but are
+excluded from the model-ready consolidated tables.
+
 ## Planned modeling approach
 
 - Pit-stop count: count or classification model using only information known at prediction time.
