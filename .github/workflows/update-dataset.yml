@@ -1,0 +1,87 @@
+name: Update F1 dataset
+
+on:
+  schedule:
+    # Tuesday gives post-race corrections time to reach upstream sources.
+    - cron: "17 6 * * 2"
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: First season to include
+        required: true
+        default: "2023"
+      end_year:
+        description: Last season to include (blank means current year)
+        required: false
+      refresh:
+        description: Replace cached raw source snapshots
+        type: boolean
+        default: false
+      publish_kaggle:
+        description: Publish a new Kaggle dataset version
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-f1-dataset
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: src
+      START_YEAR: ${{ inputs.start_year || '2023' }}
+      END_YEAR: ${{ inputs.end_year }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Restore immutable raw snapshots
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: f1-raw-${{ github.run_id }}
+          restore-keys: f1-raw-
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pytest kaggle
+      - name: Resolve season range
+        shell: bash
+        run: echo "END_YEAR=${END_YEAR:-$(date -u +%Y)}" >> "$GITHUB_ENV"
+      - name: Test pipeline
+        run: python -m pytest -q
+      - name: Build completed races
+        shell: bash
+        run: |
+          refresh=""
+          if [[ "${{ inputs.refresh }}" == "true" ]]; then refresh="--refresh"; fi
+          python scripts/build_seasons.py --start-year "$START_YEAR" --end-year "$END_YEAR" $refresh
+      - name: Validate publication files
+        run: python scripts/validate_release.py "data/processed/manifest_${START_YEAR}_${END_YEAR}.json"
+      - name: Prepare release directory
+        run: >-
+          python scripts/prepare_kaggle_release.py
+          --start-year "$START_YEAR"
+          --end-year "$END_YEAR"
+          --slug "${{ vars.KAGGLE_DATASET_SLUG || 'akashrane2609/f1-strategy-canonical-data' }}"
+      - name: Upload validated dataset artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1-strategy-data-${{ env.START_YEAR }}-${{ env.END_YEAR }}
+          path: release/kaggle/
+          if-no-files-found: error
+      - name: Publish Kaggle version
+        if: ${{ github.event_name == 'schedule' || inputs.publish_kaggle }}
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: >-
+          kaggle datasets version
+          --path release/kaggle
+          --message "Automated verified update through ${END_YEAR} (${GITHUB_SHA::7})"
