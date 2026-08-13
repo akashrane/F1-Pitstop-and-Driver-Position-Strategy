@@ -24,8 +24,8 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     (processed / "manifest_2023_2026.json").write_text("{}\n", encoding="utf-8")
 
     destination = tmp_path / "release"
-    prepare_release(tmp_path / "data", 2023, 2026, destination, "owner/slug", "Title")
+    prepare_release(tmp_path / "data", 2023, 2026, destination, "owner/slug")
 
     assert (destination / "validation_manifest.json").exists()
     metadata = json.loads((destination / "dataset-metadata.json").read_text(encoding="utf-8"))
-    assert metadata["id"] == "owner/slug"
+    assert metadata == {"id": "owner/slug"}
