@@ -109,6 +109,23 @@ create versions with `kaggle datasets version`.
 
 Random row splits and synthetic validation will be replaced by chronological race and season holdouts.
 
+## Phase 4 feature engineering
+
+Build the leakage-safe pre-race finishing-position table from a consolidated
+`race_drivers.csv` file:
+
+```powershell
+$env:PYTHONPATH = "src"
+python scripts/build_pre_race_features.py `
+  --input data/processed/consolidated_2023_2026/race_drivers.csv `
+  --output data/features/pre_race_finishing_position.csv `
+  --holdout-season 2026
+```
+
+Rolling driver and constructor features are calculated from races completed
+strictly before the current race. All drivers in one race are scored before
+that race updates any history, preventing teammate-result leakage.
+
 ## Author
 
 Akash Rane â€” [LinkedIn](https://www.linkedin.com/in/akashrane/) Â· [Portfolio](https://akashrane.github.io/website/)
