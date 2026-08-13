@@ -34,7 +34,9 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     metadata = json.loads((destination / "dataset-metadata.json").read_text(encoding="utf-8"))
     assert metadata["id"] == "owner/slug"
     assert metadata["title"] == "Formula 1 Pit Stop Dataset"
-    assert metadata["keywords"] == ["Tabular", "Sports", "Auto Racing", "Time Series Analysis"]
+    assert metadata["licenses"] == [{"name": "CC-BY-NC-4.0"}]
+    assert metadata["expectedUpdateFrequency"] == "weekly"
+    assert "keywords" not in metadata
     assert [resource["path"] for resource in metadata["resources"]] == [
         "pit_events.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv"
     ]

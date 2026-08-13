@@ -11,7 +11,7 @@ from pathlib import Path
 from f1_strategy_data.release_metadata import (
     COLUMN_DESCRIPTIONS,
     DATASET_DESCRIPTION,
-    DATASET_KEYWORDS,
+    DATASET_LICENSE,
     DATASET_SUBTITLE,
     DATASET_TITLE,
     TABLE_DESCRIPTIONS,
@@ -52,7 +52,8 @@ def prepare_release(
         "title": DATASET_TITLE,
         "subtitle": DATASET_SUBTITLE,
         "description": DATASET_DESCRIPTION,
-        "keywords": DATASET_KEYWORDS,
+        "licenses": [{"name": DATASET_LICENSE}],
+        "expectedUpdateFrequency": "weekly",
         "resources": resources,
     }
     (destination / "dataset-metadata.json").write_text(
