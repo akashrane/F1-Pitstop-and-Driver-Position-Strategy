@@ -19,6 +19,15 @@ PRE_RACE_COLUMNS = (
     "constructor_recent5_avg_finish", "classified_position", "dataset_split",
 )
 
+PIT_COUNT_COLUMNS = (
+    "season", "round_number", "session_key", "driver_id", "constructor_id",
+    "grid_position", "driver_prior_races", "driver_prior_avg_pit_stops",
+    "driver_recent5_avg_pit_stops", "driver_prior_zero_stop_rate",
+    "driver_prior_two_plus_stop_rate", "driver_prior_avg_stints",
+    "constructor_prior_driver_races", "constructor_prior_avg_pit_stops",
+    "constructor_recent5_avg_pit_stops", "pit_stop_count", "dataset_split",
+)
+
 
 def build_pre_race_finishing_features(
     rows: Iterable[dict[str, str]], holdout_season: int | None = None
@@ -75,6 +84,69 @@ def build_pre_race_feature_file(input_path: Path, output_path: Path, holdout_sea
     return len(features)
 
 
+def build_pit_count_features(
+    race_rows: Iterable[dict[str, str]],
+    pit_rows: Iterable[dict[str, str]],
+    stint_rows: Iterable[dict[str, str]],
+    holdout_season: int | None = None,
+) -> list[dict[str, object]]:
+    """Build pre-race pit-count features and observed stop-count targets."""
+    pit_counts = _counts_by_driver_race(pit_rows)
+    stint_counts = _counts_by_driver_race(stint_rows)
+    ordered = sorted(race_rows, key=lambda row: (
+        int(row["season"]), int(row["round_number"]), row["driver_id"]
+    ))
+    driver_history: dict[str, list[dict[str, object]]] = defaultdict(list)
+    constructor_history: dict[str, list[dict[str, object]]] = defaultdict(list)
+    output: list[dict[str, object]] = []
+    for current_race in _group_races(ordered):
+        pending: list[tuple[dict[str, str], dict[str, object]]] = []
+        for row in current_race:
+            key = _driver_race_key(row)
+            stops = pit_counts.get(key, 0)
+            stints = stint_counts.get(key)
+            driver = driver_history[row["driver_id"]]
+            constructor_id = row.get("constructor_id", "")
+            constructor = constructor_history[constructor_id] if constructor_id else []
+            season = int(row["season"])
+            output.append({
+                "season": season,
+                "round_number": int(row["round_number"]),
+                "session_key": _optional_int(row.get("session_key")),
+                "driver_id": row["driver_id"],
+                "constructor_id": constructor_id or None,
+                "grid_position": _optional_int(row.get("grid_position")),
+                **_pit_history_features("driver", driver),
+                **_pit_history_features("constructor", constructor),
+                "pit_stop_count": stops,
+                "dataset_split": "test" if holdout_season is not None and season >= holdout_season else "train",
+            })
+            pending.append((row, {"pit_stops": stops, "stints": stints}))
+        for row, record in pending:
+            driver_history[row["driver_id"]].append(record)
+            constructor_id = row.get("constructor_id", "")
+            if constructor_id:
+                constructor_history[constructor_id].append(record)
+    return output
+
+
+def build_pit_count_feature_file(
+    race_path: Path, pit_path: Path, stint_path: Path, output_path: Path,
+    holdout_season: int | None = None,
+) -> int:
+    inputs = []
+    for path in (race_path, pit_path, stint_path):
+        with path.open(encoding="utf-8", newline="") as handle:
+            inputs.append(list(csv.DictReader(handle)))
+    features = build_pit_count_features(*inputs, holdout_season=holdout_season)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(PIT_COUNT_COLUMNS))
+        writer.writeheader()
+        writer.writerows(features)
+    return len(features)
+
+
 def _group_races(rows: list[dict[str, str]]) -> Iterable[list[dict[str, str]]]:
     current_key: tuple[int, int] | None = None
     group: list[dict[str, str]] = []
@@ -109,6 +181,42 @@ def _history_features(
     if recent_grid:
         values[f"{prefix}_recent5_avg_grid"] = _average(recent, "grid")
     return values
+
+
+def _pit_history_features(prefix: str, history: list[dict[str, object]]) -> dict[str, object]:
+    recent = history[-5:]
+    if prefix == "driver":
+        return {
+            "driver_prior_races": len(history),
+            "driver_prior_avg_pit_stops": _average(history, "pit_stops"),
+            "driver_recent5_avg_pit_stops": _average(recent, "pit_stops"),
+            "driver_prior_zero_stop_rate": _rate(history, lambda value: value == 0),
+            "driver_prior_two_plus_stop_rate": _rate(history, lambda value: value >= 2),
+            "driver_prior_avg_stints": _average(history, "stints"),
+        }
+    return {
+        "constructor_prior_driver_races": len(history),
+        "constructor_prior_avg_pit_stops": _average(history, "pit_stops"),
+        "constructor_recent5_avg_pit_stops": _average(recent, "pit_stops"),
+    }
+
+
+def _counts_by_driver_race(rows: Iterable[dict[str, str]]) -> dict[tuple[int, int, str], int]:
+    counts: dict[tuple[int, int, str], int] = defaultdict(int)
+    for row in rows:
+        counts[_driver_race_key(row)] += 1
+    return dict(counts)
+
+
+def _driver_race_key(row: dict[str, str]) -> tuple[int, int, str]:
+    return int(row["season"]), int(row["round_number"]), row["driver_id"]
+
+
+def _rate(history: list[dict[str, object]], predicate: object) -> float | None:
+    if not history:
+        return None
+    matches = sum(bool(predicate(int(row["pit_stops"]))) for row in history)  # type: ignore[operator]
+    return round(matches / len(history), 6)
 
 
 def _history_record(row: dict[str, str], finish: int) -> dict[str, object]:
