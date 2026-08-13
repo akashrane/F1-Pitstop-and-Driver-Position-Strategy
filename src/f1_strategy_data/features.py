@@ -28,6 +28,13 @@ PIT_COUNT_COLUMNS = (
     "constructor_recent5_avg_pit_stops", "pit_stop_count", "dataset_split",
 )
 
+NEXT_PIT_COLUMNS = (
+    "season", "round_number", "session_key", "driver_id", "lap_number",
+    "current_stint_number", "current_compound", "tyre_age_laps",
+    "pit_stops_completed", "laps_since_last_pit", "pit_this_lap",
+    "next_pit_lap", "laps_until_next_pit", "event_observed", "dataset_split",
+)
+
 
 def build_pre_race_finishing_features(
     rows: Iterable[dict[str, str]], holdout_season: int | None = None
@@ -147,6 +154,86 @@ def build_pit_count_feature_file(
     return len(features)
 
 
+def build_next_pit_features(
+    race_rows: Iterable[dict[str, str]],
+    pit_rows: Iterable[dict[str, str]],
+    stint_rows: Iterable[dict[str, str]],
+    holdout_season: int | None = None,
+) -> list[dict[str, object]]:
+    """Build recurrent lap-level rows for next-pit classification or survival models."""
+    pits_by_race: dict[tuple[int, int, str], list[int]] = defaultdict(list)
+    for row in pit_rows:
+        pits_by_race[_driver_race_key(row)].append(
+            _required_positive_int(row.get("lap_number"), "lap_number")
+        )
+    stints_by_race: dict[tuple[int, int, str], list[dict[str, object]]] = defaultdict(list)
+    for row in stint_rows:
+        stints_by_race[_driver_race_key(row)].append({
+            "stint_number": _required_positive_int(row.get("stint_number"), "stint_number"),
+            "compound": row.get("compound") or None,
+            "lap_start": _required_positive_int(row.get("lap_start"), "lap_start"),
+            "lap_end": _required_positive_int(row.get("lap_end"), "lap_end"),
+            "tyre_age_at_start": _optional_int(row.get("tyre_age_at_start_laps")),
+        })
+    output: list[dict[str, object]] = []
+    for race in sorted(race_rows, key=lambda row: (
+        int(row["season"]), int(row["round_number"]), row["driver_id"]
+    )):
+        key = _driver_race_key(race)
+        completed_laps = _optional_int(race.get("laps_completed"))
+        if completed_laps is None or completed_laps <= 0:
+            continue
+        pit_laps = sorted(set(lap for lap in pits_by_race.get(key, []) if lap <= completed_laps))
+        stints = sorted(stints_by_race.get(key, []), key=lambda row: int(row["stint_number"]))
+        season = int(race["season"])
+        for lap in range(1, completed_laps + 1):
+            stint = _stint_for_lap(stints, lap)
+            if stint is None:
+                continue
+            previous_pits = [pit for pit in pit_laps if pit < lap]
+            future_pits = [pit for pit in pit_laps if pit >= lap]
+            next_pit = future_pits[0] if future_pits else None
+            base_age = stint["tyre_age_at_start"]
+            output.append({
+                "season": season,
+                "round_number": int(race["round_number"]),
+                "session_key": _optional_int(race.get("session_key")),
+                "driver_id": race["driver_id"],
+                "lap_number": lap,
+                "current_stint_number": stint["stint_number"],
+                "current_compound": stint["compound"],
+                "tyre_age_laps": (
+                    int(base_age) + lap - int(stint["lap_start"])
+                    if base_age is not None else None
+                ),
+                "pit_stops_completed": len(previous_pits),
+                "laps_since_last_pit": lap - previous_pits[-1] if previous_pits else lap - 1,
+                "pit_this_lap": next_pit == lap,
+                "next_pit_lap": next_pit,
+                "laps_until_next_pit": next_pit - lap if next_pit is not None else None,
+                "event_observed": next_pit is not None,
+                "dataset_split": "test" if holdout_season is not None and season >= holdout_season else "train",
+            })
+    return output
+
+
+def build_next_pit_feature_file(
+    race_path: Path, pit_path: Path, stint_path: Path, output_path: Path,
+    holdout_season: int | None = None,
+) -> int:
+    inputs = []
+    for path in (race_path, pit_path, stint_path):
+        with path.open(encoding="utf-8", newline="") as handle:
+            inputs.append(list(csv.DictReader(handle)))
+    features = build_next_pit_features(*inputs, holdout_season=holdout_season)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(NEXT_PIT_COLUMNS))
+        writer.writeheader()
+        writer.writerows(features)
+    return len(features)
+
+
 def _group_races(rows: list[dict[str, str]]) -> Iterable[list[dict[str, str]]]:
     current_key: tuple[int, int] | None = None
     group: list[dict[str, str]] = []
@@ -199,6 +286,11 @@ def _pit_history_features(prefix: str, history: list[dict[str, object]]) -> dict
         "constructor_prior_avg_pit_stops": _average(history, "pit_stops"),
         "constructor_recent5_avg_pit_stops": _average(recent, "pit_stops"),
     }
+
+
+def _stint_for_lap(stints: list[dict[str, object]], lap: int) -> dict[str, object] | None:
+    return next((stint for stint in stints
+                 if int(stint["lap_start"]) <= lap <= int(stint["lap_end"])), None)
 
 
 def _counts_by_driver_race(rows: Iterable[dict[str, str]]) -> dict[tuple[int, int, str], int]:
