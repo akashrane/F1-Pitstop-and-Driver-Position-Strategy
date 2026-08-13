@@ -79,9 +79,17 @@ jobs:
       - name: Publish Kaggle version
         if: ${{ github.event_name == 'schedule' || inputs.publish_kaggle }}
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-        run: >-
-          kaggle datasets version
-          --path release/kaggle
-          --message "Automated verified update through ${END_YEAR} (${GITHUB_SHA::7})"
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_DATASET_SLUG: ${{ vars.KAGGLE_DATASET_SLUG || 'akashrane2609/f1-strategy-canonical-data' }}
+        shell: bash
+        run: |
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "KAGGLE_API_TOKEN is not configured" >&2
+            exit 1
+          fi
+          echo "Kaggle CLI: $(kaggle --version)"
+          echo "Publishing dataset: $KAGGLE_DATASET_SLUG"
+          kaggle datasets status "$KAGGLE_DATASET_SLUG"
+          kaggle datasets version \
+            --path release/kaggle \
+            --message "Automated verified update through ${END_YEAR} (${GITHUB_SHA::7})"
