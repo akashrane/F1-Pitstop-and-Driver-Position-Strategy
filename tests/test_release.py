@@ -26,15 +26,25 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
         headers = list(schema["properties"])
         (source / f"{table}.csv").write_text(",".join(headers) + "\n", encoding="utf-8")
     (processed / "manifest_2023_2026.json").write_text("{}\n", encoding="utf-8")
+    existing_metadata = tmp_path / "current-metadata.json"
+    existing_metadata.write_text(json.dumps({
+        "title": "Existing Dataset Title",
+        "licenses": [{"name": "Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)"}],
+    }), encoding="utf-8")
 
     destination = tmp_path / "release"
-    prepare_release(tmp_path / "data", 2023, 2026, destination, "owner/slug", schema_root)
+    prepare_release(
+        tmp_path / "data", 2023, 2026, destination,
+        "owner/slug", schema_root, existing_metadata,
+    )
 
     assert (destination / "validation_manifest.json").exists()
     metadata = json.loads((destination / "dataset-metadata.json").read_text(encoding="utf-8"))
     assert metadata["id"] == "owner/slug"
-    assert metadata["title"] == "Formula 1 Pit Stop Dataset"
-    assert metadata["licenses"] == [{"name": "CC-BY-NC-4.0"}]
+    assert metadata["title"] == "Existing Dataset Title"
+    assert metadata["licenses"] == [{
+        "name": "Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)"
+    }]
     assert metadata["expectedUpdateFrequency"] == "weekly"
     assert "keywords" not in metadata
     assert [resource["path"] for resource in metadata["resources"]] == [

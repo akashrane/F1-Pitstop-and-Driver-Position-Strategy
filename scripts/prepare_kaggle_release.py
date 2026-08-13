@@ -11,7 +11,6 @@ from pathlib import Path
 from f1_strategy_data.release_metadata import (
     COLUMN_DESCRIPTIONS,
     DATASET_DESCRIPTION,
-    DATASET_LICENSE,
     DATASET_SUBTITLE,
     DATASET_TITLE,
     TABLE_DESCRIPTIONS,
@@ -25,6 +24,7 @@ def prepare_release(
     destination: Path,
     slug: str,
     schema_root: Path = Path("schemas"),
+    existing_metadata: Path | None = None,
 ) -> None:
     source = data_root / "processed" / f"consolidated_{start_year}_{end_year}"
     manifest = data_root / "processed" / f"manifest_{start_year}_{end_year}.json"
@@ -47,18 +47,28 @@ def prepare_release(
     shutil.copy2(manifest, destination / "validation_manifest.json")
     _write_dictionary(destination / "data_dictionary.csv", dictionary_rows)
     _write_readme(destination / "README.md", start_year, end_year, resources)
+    current = _read_existing_metadata(existing_metadata)
+    licenses = current.get("licenses")
+    if not isinstance(licenses, list) or len(licenses) != 1:
+        raise ValueError("Existing Kaggle metadata must contain exactly one license")
     metadata = {
         "id": slug,
-        "title": DATASET_TITLE,
+        "title": current.get("title", DATASET_TITLE),
         "subtitle": DATASET_SUBTITLE,
         "description": DATASET_DESCRIPTION,
-        "licenses": [{"name": DATASET_LICENSE}],
+        "licenses": licenses,
         "expectedUpdateFrequency": "weekly",
         "resources": resources,
     }
     (destination / "dataset-metadata.json").write_text(
         json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
     )
+
+
+def _read_existing_metadata(path: Path | None) -> dict:
+    if path is None or not path.is_file():
+        raise FileNotFoundError("Download the existing Kaggle metadata before preparing a release")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _read_schema(path: Path) -> dict:
@@ -155,8 +165,12 @@ def main() -> int:
     parser.add_argument("--destination", type=Path, default=Path("release/kaggle"))
     parser.add_argument("--slug", required=True, help="Kaggle owner/dataset-slug")
     parser.add_argument("--schema-root", type=Path, default=Path("schemas"))
+    parser.add_argument("--existing-metadata", type=Path, required=True)
     args = parser.parse_args()
-    prepare_release(args.data_root, args.start_year, args.end_year, args.destination, args.slug, args.schema_root)
+    prepare_release(
+        args.data_root, args.start_year, args.end_year, args.destination,
+        args.slug, args.schema_root, args.existing_metadata,
+    )
     return 0
 
 

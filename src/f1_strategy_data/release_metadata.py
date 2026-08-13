@@ -51,4 +51,3 @@ DATASET_DESCRIPTION = (
     "and quarantined races remain documented in validation_manifest.json. Source URLs, "
     "retrieval timestamps, feature timing, nullability, and units are included for auditability."
 )
-DATASET_LICENSE = "CC-BY-NC-4.0"
