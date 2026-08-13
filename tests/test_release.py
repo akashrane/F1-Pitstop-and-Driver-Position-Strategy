@@ -24,7 +24,17 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     for table in TABLES:
         schema = json.loads((schema_root / f"{table}.schema.json").read_text(encoding="utf-8"))
         headers = list(schema["properties"])
-        (source / f"{table}.csv").write_text(",".join(headers) + "\n", encoding="utf-8")
+        values = {column: "" for column in headers}
+        sample_values = {
+            "season": "2026", "round_number": "1", "source": "openf1",
+            "weather_source": "openf1", "source_url": "https://example.test/source",
+            "retrieved_at_utc": "2026-01-01T00:00:00+00:00", "validation_status": "verified",
+        }
+        values.update({column: value for column, value in sample_values.items() if column in values})
+        with (source / f"{table}.csv").open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=headers)
+            writer.writeheader()
+            writer.writerow(values)
     (processed / "manifest_2023_2026.json").write_text("{}\n", encoding="utf-8")
     existing_metadata = tmp_path / "current-metadata.json"
     existing_metadata.write_text(json.dumps({
@@ -49,7 +59,7 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     assert metadata["expectedUpdateFrequency"] == "weekly"
     assert "keywords" not in metadata
     assert [resource["path"] for resource in metadata["resources"]] == [
-        "pit_events.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv"
+        "pit_events.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "provenance.csv"
     ]
     race_fields = next(item for item in metadata["resources"] if item["path"] == "race_drivers.csv")["schema"]["fields"]
     assert race_fields[0] == {
@@ -57,6 +67,19 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
         "type": "integer",
         "description": "Formula 1 World Championship season year.",
     }
+    assert not {"source", "source_url", "retrieved_at_utc", "validation_status"} & {
+        field["name"] for field in race_fields
+    }
+    with (destination / "race_drivers.csv").open(encoding="utf-8", newline="") as handle:
+        assert not {"source", "source_url", "retrieved_at_utc", "validation_status"} & set(next(csv.reader(handle)))
+    with (destination / "weather_observations.csv").open(encoding="utf-8", newline="") as handle:
+        weather_headers = set(next(csv.reader(handle)))
+    assert "weather_source" in weather_headers
+    assert not {"source_url", "retrieved_at_utc", "validation_status"} & weather_headers
+    with (destination / "provenance.csv").open(encoding="utf-8", newline="") as handle:
+        provenance = list(csv.DictReader(handle))
+    assert len(provenance) == 4
+    assert {row["table"] for row in provenance} == set(TABLES)
     assert (destination / "README.md").exists()
     with (destination / "data_dictionary.csv").open(encoding="utf-8", newline="") as handle:
         dictionary = list(csv.DictReader(handle))

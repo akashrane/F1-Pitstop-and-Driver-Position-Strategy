@@ -5,7 +5,15 @@ TABLE_DESCRIPTIONS = {
     "stints": "One row per continuous tyre stint, including compound, lap boundaries, and tyre age.",
     "pit_events": "One row per observed pit-lane visit, including stop order, lap, and available durations.",
     "weather_observations": "Timestamped trackside weather observations recorded during race sessions.",
+    "provenance": "Compact source and retrieval metadata removed from the analysis-ready CSV files.",
 }
+
+PUBLIC_EXCLUDED_COLUMNS = {"source", "source_url", "retrieved_at_utc", "validation_status"}
+
+PROVENANCE_COLUMNS = (
+    "season", "round_number", "table", "source", "source_url",
+    "retrieved_at_utc", "validation_status",
+)
 
 COLUMN_DESCRIPTIONS = {
     "season": "Formula 1 World Championship season year.",
@@ -41,6 +49,7 @@ COLUMN_DESCRIPTIONS = {
     "source_url": "URL of the upstream source request used for the record.",
     "retrieved_at_utc": "UTC timestamp at which the source response was retrieved.",
     "validation_status": "Data-quality state: verified, warning, quarantined, or unavailable.",
+    "table": "Canonical table from which the provenance record was extracted.",
 }
 
 DATASET_TITLE = "Formula 1 Pit Stop Dataset"

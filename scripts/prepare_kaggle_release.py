@@ -13,6 +13,8 @@ from f1_strategy_data.release_metadata import (
     DATASET_DESCRIPTION,
     DATASET_SUBTITLE,
     DATASET_TITLE,
+    PROVENANCE_COLUMNS,
+    PUBLIC_EXCLUDED_COLUMNS,
     TABLE_DESCRIPTIONS,
 )
 
@@ -33,17 +35,30 @@ def prepare_release(
     destination.mkdir(parents=True, exist_ok=True)
     resources = []
     dictionary_rows = []
+    provenance_rows: list[dict[str, str]] = []
     for path in sorted(source.glob("*.csv")):
         table = path.stem
         schema = _read_schema(schema_root / f"{table}.schema.json")
-        fields = _document_fields(path, table, schema)
-        shutil.copy2(path, destination / path.name)
+        rows, headers = _read_canonical_csv(path, schema)
+        public_headers = [column for column in headers if column not in PUBLIC_EXCLUDED_COLUMNS]
+        fields = _document_fields(public_headers, table, schema)
+        _write_projected_csv(destination / path.name, rows, public_headers)
+        provenance_rows.extend(_extract_provenance(table, rows))
         resources.append({
             "path": path.name,
             "description": TABLE_DESCRIPTIONS[table],
             "schema": {"fields": fields},
         })
         dictionary_rows.extend(_dictionary_rows(table, path.name, fields, schema))
+    provenance_rows = _deduplicate_rows(provenance_rows, PROVENANCE_COLUMNS)
+    _write_rows(destination / "provenance.csv", provenance_rows, PROVENANCE_COLUMNS)
+    provenance_fields = _provenance_fields()
+    resources.append({
+        "path": "provenance.csv",
+        "description": TABLE_DESCRIPTIONS["provenance"],
+        "schema": {"fields": provenance_fields},
+    })
+    dictionary_rows.extend(_provenance_dictionary_rows(provenance_fields))
     shutil.copy2(manifest, destination / "validation_manifest.json")
     _write_dictionary(destination / "data_dictionary.csv", dictionary_rows)
     _write_readme(destination / "README.md", start_year, end_year, resources)
@@ -73,12 +88,19 @@ def _read_schema(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _document_fields(csv_path: Path, table: str, schema: dict) -> list[dict[str, str]]:
+def _read_canonical_csv(csv_path: Path, schema: dict) -> tuple[list[dict[str, str]], list[str]]:
     with csv_path.open(encoding="utf-8", newline="") as handle:
-        headers = next(csv.reader(handle))
+        reader = csv.DictReader(handle)
+        headers = reader.fieldnames or []
+        rows = list(reader)
     properties = schema["properties"]
     if headers != list(properties):
         raise ValueError(f"{csv_path.name} columns do not match schema order")
+    return rows, headers
+
+
+def _document_fields(headers: list[str], table: str, schema: dict) -> list[dict[str, str]]:
+    properties = schema["properties"]
     fields = []
     for column in headers:
         if column not in COLUMN_DESCRIPTIONS:
@@ -90,6 +112,63 @@ def _document_fields(csv_path: Path, table: str, schema: dict) -> list[dict[str,
             "description": COLUMN_DESCRIPTIONS[column],
         })
     return fields
+
+
+def _write_projected_csv(path: Path, rows: list[dict[str, str]], headers: list[str]) -> None:
+    projected = [{column: row[column] for column in headers} for row in rows]
+    _write_rows(path, projected, headers)
+
+
+def _write_rows(path: Path, rows: list[dict[str, object]], headers: list[str] | tuple[str, ...]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(headers))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _extract_provenance(table: str, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    extracted = []
+    for row in rows:
+        extracted.append({
+            "season": row["season"],
+            "round_number": row["round_number"],
+            "table": table,
+            "source": row.get("source") or row.get("weather_source", ""),
+            "source_url": row.get("source_url", ""),
+            "retrieved_at_utc": row.get("retrieved_at_utc", ""),
+            "validation_status": row.get("validation_status", ""),
+        })
+    return extracted
+
+
+def _deduplicate_rows(rows: list[dict[str, str]], headers: tuple[str, ...]) -> list[dict[str, str]]:
+    unique = {tuple(row[column] for column in headers): row for row in rows}
+    return [unique[key] for key in sorted(unique)]
+
+
+def _provenance_fields() -> list[dict[str, str]]:
+    types = {"season": "integer", "round_number": "integer", "retrieved_at_utc": "datetime"}
+    return [{
+        "name": column,
+        "type": types.get(column, "string"),
+        "description": COLUMN_DESCRIPTIONS[column],
+    } for column in PROVENANCE_COLUMNS]
+
+
+def _provenance_dictionary_rows(fields: list[dict[str, str]]) -> list[dict[str, object]]:
+    return [{
+        "table": "provenance",
+        "file": "provenance.csv",
+        "column": field["name"],
+        "type": field["type"],
+        "nullable": False,
+        "description": field["description"],
+        "feature_time": "",
+        "role": "identifier" if field["name"] in {"season", "round_number", "table"} else "",
+        "target": False,
+        "unit": "",
+        "allowed_values": "",
+    } for field in fields]
 
 
 def _kaggle_type(spec: dict) -> str:
@@ -144,7 +223,7 @@ Validated canonical data for completed Formula 1 races from {start_year} through
 
 ## Quality policy
 
-Only verified races enter the published CSV tables. Warning, quarantined, failed, and unavailable races are retained in the validation manifest rather than silently filled or presented as verified. Source URLs and UTC retrieval timestamps are retained in every canonical table.
+Only verified races enter the published analysis-ready CSV tables. Warning, quarantined, failed, and unavailable races are retained in the validation manifest rather than silently filled or presented as verified. Repeated source URLs, retrieval timestamps, and validation fields are removed from the analysis-ready tables and preserved compactly in `provenance.csv`.
 
 ## Modelling boundary
 
