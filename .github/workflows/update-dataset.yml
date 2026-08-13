@@ -64,12 +64,18 @@ jobs:
           python scripts/build_seasons.py --start-year "$START_YEAR" --end-year "$END_YEAR" $refresh
       - name: Validate publication files
         run: python scripts/validate_release.py "data/processed/manifest_${START_YEAR}_${END_YEAR}.json"
+      - name: Download current Kaggle metadata
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_DATASET_SLUG: ${{ vars.KAGGLE_DATASET_SLUG || 'akashrane2609/formula-1-pit-stop-dataset' }}
+        run: kaggle datasets metadata "$KAGGLE_DATASET_SLUG" --path release/current-metadata
       - name: Prepare release directory
         run: >-
           python scripts/prepare_kaggle_release.py
           --start-year "$START_YEAR"
           --end-year "$END_YEAR"
-          --slug "${{ vars.KAGGLE_DATASET_SLUG || 'akashrane2609/f1-strategy-canonical-data' }}"
+          --slug "${{ vars.KAGGLE_DATASET_SLUG || 'akashrane2609/formula-1-pit-stop-dataset' }}"
+          --existing-metadata release/current-metadata/dataset-metadata.json
       - name: Upload validated dataset artifact
         uses: actions/upload-artifact@v4
         with:
@@ -79,9 +85,17 @@ jobs:
       - name: Publish Kaggle version
         if: ${{ github.event_name == 'schedule' || inputs.publish_kaggle }}
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-        run: >-
-          kaggle datasets version
-          --path release/kaggle
-          --message "Automated verified update through ${END_YEAR} (${GITHUB_SHA::7})"
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_DATASET_SLUG: ${{ vars.KAGGLE_DATASET_SLUG || 'akashrane2609/formula-1-pit-stop-dataset' }}
+        shell: bash
+        run: |
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "KAGGLE_API_TOKEN is not configured" >&2
+            exit 1
+          fi
+          echo "Kaggle CLI: $(kaggle --version)"
+          echo "Publishing dataset: $KAGGLE_DATASET_SLUG"
+          kaggle datasets status "$KAGGLE_DATASET_SLUG"
+          kaggle datasets version \
+            --path release/kaggle \
+            --message "Automated verified update through ${END_YEAR} (${GITHUB_SHA::7})"
