@@ -43,6 +43,7 @@ COLUMN_DESCRIPTIONS = {
     "validation_status": "Data-quality state: verified, warning, quarantined, or unavailable.",
 }
 
+DATASET_TITLE = "Formula 1 Pit Stop Dataset"
 DATASET_SUBTITLE = "Validated F1 pit stops, tyre stints, race results and trackside weather"
 DATASET_DESCRIPTION = (
     "Accuracy-first Formula 1 tables for pit-stop and finishing-position modelling. "
@@ -51,10 +52,8 @@ DATASET_DESCRIPTION = (
     "retrieval timestamps, feature timing, nullability, and units are included for auditability."
 )
 DATASET_KEYWORDS = [
-    "formula 1",
-    "motorsport",
-    "pit stop",
-    "weather",
-    "sports analytics",
-    "machine learning",
+    "Tabular",
+    "Sports",
+    "Auto Racing",
+    "Time Series Analysis",
 ]

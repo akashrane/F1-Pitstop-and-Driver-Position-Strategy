@@ -13,6 +13,7 @@ from f1_strategy_data.release_metadata import (
     DATASET_DESCRIPTION,
     DATASET_KEYWORDS,
     DATASET_SUBTITLE,
+    DATASET_TITLE,
     TABLE_DESCRIPTIONS,
 )
 
@@ -48,6 +49,7 @@ def prepare_release(
     _write_readme(destination / "README.md", start_year, end_year, resources)
     metadata = {
         "id": slug,
+        "title": DATASET_TITLE,
         "subtitle": DATASET_SUBTITLE,
         "description": DATASET_DESCRIPTION,
         "keywords": DATASET_KEYWORDS,
