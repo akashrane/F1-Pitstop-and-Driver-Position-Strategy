@@ -93,3 +93,23 @@ jobs:
           kaggle datasets version \
             --path release/kaggle \
             --message "Automated verified update through ${END_YEAR} (${GITHUB_SHA::7})"
+          echo "Waiting for Kaggle to finish processing the new version"
+          sleep 10
+          ready=false
+          for attempt in {1..30}; do
+            status="$(kaggle datasets status "$KAGGLE_DATASET_SLUG" 2>&1)"
+            echo "Kaggle status ($attempt/30): $status"
+            if grep -qi "ready" <<<"$status"; then
+              ready=true
+              break
+            fi
+            sleep 10
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "Kaggle did not report ready within five minutes" >&2
+            exit 1
+          fi
+          echo "Applying dataset, file, and column descriptions"
+          kaggle datasets metadata "$KAGGLE_DATASET_SLUG" \
+            --path release/kaggle \
+            --update
