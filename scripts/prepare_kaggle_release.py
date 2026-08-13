@@ -48,15 +48,11 @@ def prepare_release(
     _write_dictionary(destination / "data_dictionary.csv", dictionary_rows)
     _write_readme(destination / "README.md", start_year, end_year, resources)
     current = _read_existing_metadata(existing_metadata)
-    licenses = current.get("licenses")
-    if not isinstance(licenses, list) or len(licenses) != 1:
-        raise ValueError("Existing Kaggle metadata must contain exactly one license")
     metadata = {
         "id": slug,
         "title": current.get("title", DATASET_TITLE),
         "subtitle": DATASET_SUBTITLE,
         "description": DATASET_DESCRIPTION,
-        "licenses": licenses,
         "expectedUpdateFrequency": "weekly",
         "resources": resources,
     }

@@ -29,7 +29,10 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     existing_metadata = tmp_path / "current-metadata.json"
     existing_metadata.write_text(json.dumps({
         "title": "Existing Dataset Title",
-        "licenses": [{"name": "Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)"}],
+        "license": {
+            "name": "Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)",
+            "url": "https://creativecommons.org/licenses/by-nc/4.0/",
+        },
     }), encoding="utf-8")
 
     destination = tmp_path / "release"
@@ -42,9 +45,7 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     metadata = json.loads((destination / "dataset-metadata.json").read_text(encoding="utf-8"))
     assert metadata["id"] == "owner/slug"
     assert metadata["title"] == "Existing Dataset Title"
-    assert metadata["licenses"] == [{
-        "name": "Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)"
-    }]
+    assert "licenses" not in metadata
     assert metadata["expectedUpdateFrequency"] == "weekly"
     assert "keywords" not in metadata
     assert [resource["path"] for resource in metadata["resources"]] == [
