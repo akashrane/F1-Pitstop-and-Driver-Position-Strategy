@@ -109,6 +109,53 @@ create versions with `kaggle datasets version`.
 
 Random row splits and synthetic validation will be replaced by chronological race and season holdouts.
 
+## Phase 4 feature engineering
+
+Build the leakage-safe pre-race finishing-position table from a consolidated
+`race_drivers.csv` file:
+
+```powershell
+$env:PYTHONPATH = "src"
+python scripts/build_pre_race_features.py `
+  --input data/processed/consolidated_2023_2026/race_drivers.csv `
+  --output data/features/pre_race_finishing_position.csv `
+  --holdout-season 2026
+```
+
+Rolling driver and constructor features are calculated from races completed
+strictly before the current race. All drivers in one race are scored before
+that race updates any history, preventing teammate-result leakage.
+
+Build the pre-race pit-stop-count table from the three verified canonical
+inputs:
+
+```powershell
+python scripts/build_pit_count_features.py `
+  --race-drivers data/processed/consolidated_2023_2026/race_drivers.csv `
+  --pit-events data/processed/consolidated_2023_2026/pit_events.csv `
+  --stints data/processed/consolidated_2023_2026/stints.csv `
+  --output data/features/pre_race_pit_stop_count.csv `
+  --holdout-season 2026
+```
+
+A missing pit-event row becomes a zero-stop target only because these inputs
+contain verified races; unavailable or quarantined races are excluded earlier.
+
+Build the live lap-level next-pit table:
+
+```powershell
+python scripts/build_next_pit_features.py `
+  --race-drivers data/processed/consolidated_2023_2026/race_drivers.csv `
+  --pit-events data/processed/consolidated_2023_2026/pit_events.csv `
+  --stints data/processed/consolidated_2023_2026/stints.csv `
+  --output data/features/live_next_pit.csv `
+  --holdout-season 2026
+```
+
+Each row represents the state at one driver lap. Future pit timing appears only
+in target columns. Weather is intentionally omitted until lap timestamps are
+available for a time-safe observation join.
+
 ## Author
 
 Akash Rane â€” [LinkedIn](https://www.linkedin.com/in/akashrane/) Â· [Portfolio](https://akashrane.github.io/website/)

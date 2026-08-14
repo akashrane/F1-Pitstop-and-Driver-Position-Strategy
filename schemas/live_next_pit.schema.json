@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "live_next_pit.schema.json",
+  "title": "Live next-pit features",
+  "description": "One driver-lap row for recurrent pit-event classification or survival modelling.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["season", "round_number", "session_key", "driver_id", "lap_number", "current_stint_number", "current_compound", "tyre_age_laps", "pit_stops_completed", "laps_since_last_pit", "pit_this_lap", "next_pit_lap", "laps_until_next_pit", "event_observed", "dataset_split"],
+  "properties": {
+    "season": {"type": "integer", "x-role": "identifier"},
+    "round_number": {"type": "integer", "x-role": "identifier"},
+    "session_key": {"type": ["integer", "null"], "x-role": "identifier"},
+    "driver_id": {"type": "string", "x-role": "identifier"},
+    "lap_number": {"type": "integer", "minimum": 1, "x-feature-time": "live"},
+    "current_stint_number": {"type": "integer", "minimum": 1, "x-feature-time": "live"},
+    "current_compound": {"type": ["string", "null"], "x-feature-time": "live"},
+    "tyre_age_laps": {"type": ["integer", "null"], "minimum": 0, "x-feature-time": "live"},
+    "pit_stops_completed": {"type": "integer", "minimum": 0, "x-feature-time": "live"},
+    "laps_since_last_pit": {"type": "integer", "minimum": 0, "x-feature-time": "live"},
+    "pit_this_lap": {"type": "boolean", "x-feature-time": "post_race", "x-target": true},
+    "next_pit_lap": {"type": ["integer", "null"], "minimum": 1, "x-feature-time": "post_race", "x-target": true},
+    "laps_until_next_pit": {"type": ["integer", "null"], "minimum": 0, "x-feature-time": "post_race", "x-target": true},
+    "event_observed": {"type": "boolean", "x-feature-time": "post_race", "x-target": true},
+    "dataset_split": {"type": "string", "enum": ["train", "test"], "x-role": "split"}
+  }
+}

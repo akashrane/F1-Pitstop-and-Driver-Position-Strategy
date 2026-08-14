@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pre_race_finishing_position.schema.json",
+  "title": "Pre-race finishing-position features",
+  "description": "One driver-race row. Rolling features use only races completed before the current race.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "season", "round_number", "session_key", "driver_id", "constructor_id",
+    "grid_position", "driver_prior_starts", "driver_prior_avg_finish",
+    "driver_prior_avg_grid", "driver_prior_dnf_rate",
+    "driver_prior_avg_positions_gained", "driver_recent5_avg_finish",
+    "driver_recent5_avg_grid", "constructor_prior_starts",
+    "constructor_prior_avg_finish", "constructor_prior_dnf_rate",
+    "constructor_recent5_avg_finish", "classified_position", "dataset_split"
+  ],
+  "properties": {
+    "season": {"type": "integer", "x-role": "identifier"},
+    "round_number": {"type": "integer", "x-role": "identifier"},
+    "session_key": {"type": ["integer", "null"], "x-role": "identifier"},
+    "driver_id": {"type": "string", "x-role": "identifier"},
+    "constructor_id": {"type": ["string", "null"], "x-feature-time": "pre_race"},
+    "grid_position": {"type": ["integer", "null"], "x-feature-time": "pre_race"},
+    "driver_prior_starts": {"type": "integer", "minimum": 0, "x-feature-time": "pre_race"},
+    "driver_prior_avg_finish": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "driver_prior_avg_grid": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "driver_prior_dnf_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "x-feature-time": "pre_race"},
+    "driver_prior_avg_positions_gained": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "driver_recent5_avg_finish": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "driver_recent5_avg_grid": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "constructor_prior_starts": {"type": "integer", "minimum": 0, "x-feature-time": "pre_race"},
+    "constructor_prior_avg_finish": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "constructor_prior_dnf_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "x-feature-time": "pre_race"},
+    "constructor_recent5_avg_finish": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "classified_position": {"type": "integer", "minimum": 1, "x-feature-time": "post_race", "x-target": true},
+    "dataset_split": {"type": "string", "enum": ["train", "test"], "x-role": "split"}
+  }
+}

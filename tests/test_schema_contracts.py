@@ -8,6 +8,9 @@ EXPECTED = {
     "stints.schema.json": {"session_key", "driver_id", "stint_number", "source", "source_url", "retrieved_at_utc", "validation_status"},
     "pit_events.schema.json": {"session_key", "driver_id", "stop_number", "source", "source_url", "retrieved_at_utc", "validation_status"},
     "weather_observations.schema.json": {"session_key", "observed_at_utc", "weather_source", "source_url", "retrieved_at_utc", "validation_status"},
+    "pre_race_finishing_position.schema.json": {"season", "round_number", "driver_id", "classified_position", "dataset_split"},
+    "pre_race_pit_stop_count.schema.json": {"season", "round_number", "driver_id", "pit_stop_count", "dataset_split"},
+    "live_next_pit.schema.json": {"season", "round_number", "driver_id", "lap_number", "pit_this_lap", "dataset_split"},
 }
 
 

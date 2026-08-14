@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pre_race_pit_stop_count.schema.json",
+  "title": "Pre-race pit-stop-count features",
+  "description": "One driver-race row with historical strategy features calculated before the race.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["season", "round_number", "session_key", "driver_id", "constructor_id", "grid_position", "driver_prior_races", "driver_prior_avg_pit_stops", "driver_recent5_avg_pit_stops", "driver_prior_zero_stop_rate", "driver_prior_two_plus_stop_rate", "driver_prior_avg_stints", "constructor_prior_driver_races", "constructor_prior_avg_pit_stops", "constructor_recent5_avg_pit_stops", "pit_stop_count", "dataset_split"],
+  "properties": {
+    "season": {"type": "integer", "x-role": "identifier"},
+    "round_number": {"type": "integer", "x-role": "identifier"},
+    "session_key": {"type": ["integer", "null"], "x-role": "identifier"},
+    "driver_id": {"type": "string", "x-role": "identifier"},
+    "constructor_id": {"type": ["string", "null"], "x-feature-time": "pre_race"},
+    "grid_position": {"type": ["integer", "null"], "x-feature-time": "pre_race"},
+    "driver_prior_races": {"type": "integer", "minimum": 0, "x-feature-time": "pre_race"},
+    "driver_prior_avg_pit_stops": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "driver_recent5_avg_pit_stops": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "driver_prior_zero_stop_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "x-feature-time": "pre_race"},
+    "driver_prior_two_plus_stop_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "x-feature-time": "pre_race"},
+    "driver_prior_avg_stints": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "constructor_prior_driver_races": {"type": "integer", "minimum": 0, "x-feature-time": "pre_race"},
+    "constructor_prior_avg_pit_stops": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "constructor_recent5_avg_pit_stops": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "pit_stop_count": {"type": "integer", "minimum": 0, "x-feature-time": "post_race", "x-target": true},
+    "dataset_split": {"type": "string", "enum": ["train", "test"], "x-role": "split"}
+  }
+}
