@@ -156,6 +156,27 @@ Each row represents the state at one driver lap. Future pit timing appears only
 in target columns. Weather is intentionally omitted until lap timestamps are
 available for a time-safe observation join.
 
+## Phase 5 baseline models
+
+Install the modeling dependencies and evaluate all three tasks with a strict
+future-season holdout:
+
+```powershell
+python -m pip install -e ".[modeling,dev]"
+$env:PYTHONPATH = "src"
+python scripts/train_baselines.py `
+  --finishing-position data/features/pre_race_finishing_position.csv `
+  --pit-stop-count data/features/pre_race_pit_stop_count.csv `
+  --next-pit data/features/live_next_pit.csv
+```
+
+The command compares a simple dummy baseline with a gradient-boosted
+model and writes `reports/generated/baseline_metrics.json`. Regression tasks
+report MAE and RMSE. The imbalanced next-pit classifier reports average
+precision, Brier score, accuracy, and F1. Fixed feature allowlists exclude all
+targets, identifiers used only for joining, and post-race fields. Training is
+rejected unless every training season precedes every test season.
+
 ## Author
 
 Akash Rane â€” [LinkedIn](https://www.linkedin.com/in/akashrane/) Â· [Portfolio](https://akashrane.github.io/website/)
