@@ -14,7 +14,12 @@ def test_consolidate_combines_round_files(tmp_path: Path):
             writer.writeheader()
             writer.writerow({"season": 2026, "driver_id": f"driver-{round_number}"})
         (folder / "validation_report.json").write_text(
-            json.dumps({"status": "verified" if round_number == 1 else "quarantined"}),
+            json.dumps({
+                "status": "verified" if round_number == 1 else "quarantined",
+                "issues": [] if round_number == 1 else [{
+                    "severity": "error", "table": "race_drivers", "code": "bad_result"
+                }],
+            }),
             encoding="utf-8",
         )
     counts = consolidate(tmp_path, 2026, 2026)

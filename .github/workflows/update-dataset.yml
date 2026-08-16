@@ -9,7 +9,7 @@ on:
       start_year:
         description: First season to include
         required: true
-        default: "2023"
+        default: "1950"
       end_year:
         description: Last season to include (blank means current year)
         required: false
@@ -32,10 +32,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       PYTHONPATH: src
-      START_YEAR: ${{ inputs.start_year || '2023' }}
+      START_YEAR: ${{ inputs.start_year || '1950' }}
       END_YEAR: ${{ inputs.end_year }}
     steps:
       - uses: actions/checkout@v4

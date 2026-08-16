@@ -28,11 +28,14 @@ def driver_number_map(race: dict[str, Any]) -> dict[int, str]:
 def normalize_race_drivers(
     race: dict[str, Any],
     openf1_results: Iterable[dict[str, Any]],
-    session_key: int,
+    session_key: int | None,
     source_url: str,
     retrieved_at_utc: str,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    by_number = {int(row["driver_number"]): row for row in openf1_results}
+    by_number = {
+        int(row["driver_number"]): row for row in openf1_results
+        if row.get("driver_number") is not None
+    }
     rows: list[dict[str, Any]] = []
     mismatches: list[dict[str, Any]] = []
     for result in race.get("Results", []):
@@ -53,6 +56,7 @@ def normalize_race_drivers(
             "round_number": int(race["round"]),
             "session_key": session_key,
             "driver_id": driver["driverId"],
+            "car_number": str(number_value) if number_value is not None else None,
             "driver_name": f"{driver['givenName']} {driver['familyName']}",
             "constructor_id": result.get("Constructor", {}).get("constructorId"),
             "grid_position": _optional_int(result.get("grid")),
@@ -62,7 +66,7 @@ def normalize_race_drivers(
             "source": "jolpica",
             "source_url": source_url,
             "retrieved_at_utc": retrieved_at_utc,
-            "validation_status": "verified" if openf1_position == jolpica_position else "warning",
+            "validation_status": "verified" if openf1_row is None or openf1_position == jolpica_position else "warning",
         })
     return rows, mismatches
 
@@ -89,7 +93,8 @@ def normalize_stints(
         "source_url": source_url,
         "retrieved_at_utc": retrieved_at_utc,
         "validation_status": "verified",
-    } for row in source_rows if int(row["driver_number"]) in identifiers]
+    } for row in source_rows
+      if row.get("driver_number") is not None and int(row["driver_number"]) in identifiers]
     by_driver: dict[tuple[int, str], list[dict[str, Any]]] = {}
     for row in rows:
         by_driver.setdefault((row["session_key"], row["driver_id"]), []).append(row)
@@ -110,6 +115,8 @@ def count_shared_stint_boundaries(
     """Count adjacent source stints sharing exactly one boundary lap."""
     by_driver: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
     for row in source_rows:
+        if row.get("driver_number") is None:
+            continue
         driver_number = int(row["driver_number"])
         if driver_number in identifiers:
             key = (int(row["session_key"]), driver_number)
@@ -134,7 +141,8 @@ def normalize_pit_events(
 ) -> list[dict[str, Any]]:
     counters: dict[str, int] = {}
     output: list[dict[str, Any]] = []
-    for row in sorted(source_rows, key=lambda item: (int(item["driver_number"]), item["date"])):
+    valid_rows = [row for row in source_rows if row.get("driver_number") is not None]
+    for row in sorted(valid_rows, key=lambda item: (int(item["driver_number"]), item["date"])):
         driver_id = identifiers.get(int(row["driver_number"]))
         if driver_id is None:
             continue
@@ -146,7 +154,7 @@ def normalize_pit_events(
             "driver_id": driver_id,
             "stop_number": counters[driver_id],
             "lap_number": int(row["lap_number"]),
-            "pit_duration_s": _optional_float(row.get("pit_duration") or row.get("lane_duration")),
+            "pit_duration_s": _duration_seconds(row.get("pit_duration") or row.get("lane_duration")),
             "stop_duration_s": _optional_float(row.get("stop_duration")),
             "driver_laps_completed": completed_laps.get(driver_id),
             "source": "openf1",
@@ -164,7 +172,7 @@ def normalize_jolpica_pit_events(
     completed_laps: dict[str, int | None],
     season: int,
     round_number: int,
-    session_key: int,
+    session_key: int | None,
     source_url: str,
     retrieved_at_utc: str,
 ) -> list[dict[str, Any]]:
@@ -172,6 +180,8 @@ def normalize_jolpica_pit_events(
     jolpica_rows = races[0].get("PitStops", []) if races else []
     openf1_by_key: dict[tuple[str, int], dict[str, Any]] = {}
     for row in openf1_rows:
+        if row.get("driver_number") is None:
+            continue
         driver_id = identifiers.get(int(row["driver_number"]))
         if driver_id is not None:
             openf1_by_key[(driver_id, int(row["lap_number"]))] = row
@@ -187,7 +197,7 @@ def normalize_jolpica_pit_events(
             "driver_id": driver_id,
             "stop_number": int(row["stop"]),
             "lap_number": lap_number,
-            "pit_duration_s": _optional_float(enrichment.get("pit_duration") or enrichment.get("lane_duration") or row.get("duration")),
+            "pit_duration_s": _duration_seconds(enrichment.get("pit_duration") or enrichment.get("lane_duration") or row.get("duration")),
             "stop_duration_s": _optional_float(enrichment.get("stop_duration")),
             "driver_laps_completed": completed_laps.get(driver_id),
             "source": "jolpica",
@@ -249,6 +259,7 @@ def normalize_race_context(
         "session_key": session_key,
         "meeting_key": _optional_int(session.get("meeting_key")),
         "circuit_key": _optional_int(session.get("circuit_key")),
+        "circuit_id": None,
         "circuit_short_name": session.get("circuit_short_name"),
         "country_code": session.get("country_code"),
         "country_name": session.get("country_name"),
@@ -275,6 +286,44 @@ def normalize_race_context(
     }]
 
 
+def normalize_historical_race_context(
+    race: dict[str, Any], source_url: str, retrieved_at_utc: str
+) -> list[dict[str, Any]]:
+    """Normalize pre-OpenF1 race metadata without inventing telemetry."""
+    circuit = race.get("Circuit", {})
+    location = circuit.get("Location", {})
+    time = race.get("time")
+    session_start = f"{race['date']}T{time}" if time else None
+    results = race.get("Results", [])
+    return [{
+        "season": int(race["season"]),
+        "round_number": int(race["round"]),
+        "session_key": None,
+        "meeting_key": None,
+        "circuit_key": None,
+        "circuit_id": circuit.get("circuitId"),
+        "circuit_short_name": circuit.get("circuitName"),
+        "country_code": None,
+        "country_name": location.get("country"),
+        "location": location.get("locality"),
+        "session_start_utc": session_start,
+        "start_weather_observed_at_utc": None,
+        "start_air_temperature_c": None,
+        "start_track_temperature_c": None,
+        "start_humidity_pct": None,
+        "start_pressure_mbar": None,
+        "start_rainfall": None,
+        "start_wind_speed_ms": None,
+        "winner_laps_completed": _optional_int(results[0].get("laps")) if results else None,
+        "safety_car_deployments": None,
+        "virtual_safety_car_deployments": None,
+        "source": "jolpica",
+        "source_url": source_url,
+        "retrieved_at_utc": retrieved_at_utc,
+        "validation_status": "verified",
+    }]
+
+
 def _closest_start_weather(
     rows: Iterable[dict[str, Any]], start: datetime
 ) -> dict[str, Any] | None:
@@ -295,3 +344,13 @@ def _optional_int(value: object) -> int | None:
 
 def _optional_float(value: object) -> float | None:
     return None if value in (None, "") else float(value)
+
+
+def _duration_seconds(value: object) -> float | None:
+    if value in (None, ""):
+        return None
+    text = str(value)
+    if ":" not in text:
+        return float(text)
+    minutes, seconds = text.split(":", 1)
+    return int(minutes) * 60 + float(seconds)
