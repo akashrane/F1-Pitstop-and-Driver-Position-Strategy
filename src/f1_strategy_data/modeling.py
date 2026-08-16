@@ -36,8 +36,13 @@ TASKS: dict[str, dict[str, Any]] = {
             "driver_recent5_avg_grid", "constructor_prior_starts",
             "constructor_prior_avg_finish", "constructor_prior_dnf_rate",
             "constructor_recent5_avg_finish",
+            "start_air_temperature_c", "start_track_temperature_c",
+            "start_humidity_pct", "start_pressure_mbar", "start_rainfall",
+            "start_wind_speed_ms", "circuit_prior_races",
+            "circuit_prior_avg_winner_laps", "circuit_prior_avg_safety_cars",
+            "circuit_prior_avg_virtual_safety_cars", "circuit_prior_rain_rate",
         ],
-        "categorical": ["driver_id", "constructor_id"],
+        "categorical": ["driver_id", "constructor_id", "circuit_key"],
     },
     "pit_stop_count": {
         "target": "pit_stop_count",
@@ -48,8 +53,13 @@ TASKS: dict[str, dict[str, Any]] = {
             "driver_prior_two_plus_stop_rate", "driver_prior_avg_stints",
             "constructor_prior_driver_races", "constructor_prior_avg_pit_stops",
             "constructor_recent5_avg_pit_stops",
+            "start_air_temperature_c", "start_track_temperature_c",
+            "start_humidity_pct", "start_pressure_mbar", "start_rainfall",
+            "start_wind_speed_ms", "circuit_prior_races",
+            "circuit_prior_avg_winner_laps", "circuit_prior_avg_safety_cars",
+            "circuit_prior_avg_virtual_safety_cars", "circuit_prior_rain_rate",
         ],
-        "categorical": ["driver_id", "constructor_id"],
+        "categorical": ["driver_id", "constructor_id", "circuit_key"],
     },
     "next_pit": {
         "target": "pit_this_lap",
@@ -82,13 +92,17 @@ def evaluate_task(task: str, frame: pd.DataFrame) -> dict[str, Any]:
 
     x_train, x_test = train[feature_columns], test[feature_columns]
     y_train, y_test = train[spec["target"]], test[spec["target"]]
-    def preprocessor() -> ColumnTransformer:
+    def preprocessor(
+        numeric: list[str] | None = None, categorical: list[str] | None = None
+    ) -> ColumnTransformer:
+        numeric = numeric or spec["numeric"]
+        categorical = categorical or spec["categorical"]
         return ColumnTransformer([
-        ("numeric", SimpleImputer(strategy="median"), spec["numeric"]),
+        ("numeric", SimpleImputer(strategy="median"), numeric),
         ("categorical", Pipeline([
             ("impute", SimpleImputer(strategy="most_frequent")),
             ("encode", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
-        ]), spec["categorical"]),
+        ]), categorical),
         ])
 
     if spec["kind"] == "classification":
@@ -113,24 +127,46 @@ def evaluate_task(task: str, frame: pd.DataFrame) -> dict[str, Any]:
 
     baseline = DummyRegressor(strategy="median").fit(x_train, y_train)
     selection: dict[str, Any] | None = None
+    selected_features = feature_columns
+    selected_preprocessor = preprocessor()
     if task == "pit_stop_count":
         development, validation = _development_split(train, task)
+        base_numeric = spec["numeric"][:10]
+        base_categorical = ["driver_id", "constructor_id"]
         candidates = {
-            "gradient_boosting": lambda: GradientBoostingRegressor(n_estimators=100, random_state=42),
-            "random_forest": lambda: RandomForestRegressor(
-                n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=1
+            "gradient_boosting_base": (
+                lambda: GradientBoostingRegressor(n_estimators=100, random_state=42),
+                base_numeric, base_categorical,
+            ),
+            "random_forest_base": (
+                lambda: RandomForestRegressor(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=1),
+                base_numeric, base_categorical,
+            ),
+            "gradient_boosting_context": (
+                lambda: GradientBoostingRegressor(n_estimators=100, random_state=42),
+                spec["numeric"], spec["categorical"],
+            ),
+            "random_forest_context": (
+                lambda: RandomForestRegressor(n_estimators=200, min_samples_leaf=5, random_state=42, n_jobs=1),
+                spec["numeric"], spec["categorical"],
             ),
         }
         scores: dict[str, float] = {}
-        for name, factory in candidates.items():
-            candidate = Pipeline([("features", preprocessor()), ("model", factory())]).fit(
-                development[feature_columns], development[spec["target"]]
+        for name, (factory, numeric, categorical) in candidates.items():
+            columns = numeric + categorical
+            candidate = Pipeline([
+                ("features", preprocessor(numeric, categorical)), ("model", factory())
+            ]).fit(
+                development[columns], development[spec["target"]]
             )
             scores[name] = float(mean_absolute_error(
-                validation[spec["target"]], candidate.predict(validation[feature_columns])
+                validation[spec["target"]], candidate.predict(validation[columns])
             ))
         selected_name = min(scores, key=scores.get)  # type: ignore[arg-type]
-        estimator = candidates[selected_name]()
+        factory, selected_numeric, selected_categorical = candidates[selected_name]
+        estimator = factory()
+        selected_features = selected_numeric + selected_categorical
+        selected_preprocessor = preprocessor(selected_numeric, selected_categorical)
         selection = {
             "validation_season": int(validation["season"].iloc[0]),
             "validation_mae": scores,
@@ -138,9 +174,11 @@ def evaluate_task(task: str, frame: pd.DataFrame) -> dict[str, Any]:
         }
     else:
         estimator = GradientBoostingRegressor(n_estimators=100, random_state=42)
-    model = Pipeline([("features", preprocessor()), ("model", estimator)]).fit(x_train, y_train)
+    model = Pipeline([("features", selected_preprocessor), ("model", estimator)]).fit(
+        train[selected_features], y_train
+    )
     return _regression_report(
-        task, train, test, y_test, baseline, model, x_test, feature_columns, selection
+        task, train, test, y_test, baseline, model, test[selected_features], selected_features, selection
     )
 
 

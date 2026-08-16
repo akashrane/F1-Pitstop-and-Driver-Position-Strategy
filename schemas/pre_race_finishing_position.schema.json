@@ -12,7 +12,12 @@
     "driver_prior_avg_positions_gained", "driver_recent5_avg_finish",
     "driver_recent5_avg_grid", "constructor_prior_starts",
     "constructor_prior_avg_finish", "constructor_prior_dnf_rate",
-    "constructor_recent5_avg_finish", "classified_position", "dataset_split"
+    "constructor_recent5_avg_finish", "circuit_key", "start_air_temperature_c",
+    "start_track_temperature_c", "start_humidity_pct", "start_pressure_mbar",
+    "start_rainfall", "start_wind_speed_ms", "circuit_prior_races",
+    "circuit_prior_avg_winner_laps", "circuit_prior_avg_safety_cars",
+    "circuit_prior_avg_virtual_safety_cars", "circuit_prior_rain_rate",
+    "classified_position", "dataset_split"
   ],
   "properties": {
     "season": {"type": "integer", "x-role": "identifier"},
@@ -32,6 +37,18 @@
     "constructor_prior_avg_finish": {"type": ["number", "null"], "x-feature-time": "pre_race"},
     "constructor_prior_dnf_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "x-feature-time": "pre_race"},
     "constructor_recent5_avg_finish": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "circuit_key": {"type": ["integer", "null"], "x-feature-time": "pre_race"},
+    "start_air_temperature_c": {"type": ["number", "null"], "x-unit": "celsius", "x-feature-time": "race_start"},
+    "start_track_temperature_c": {"type": ["number", "null"], "x-unit": "celsius", "x-feature-time": "race_start"},
+    "start_humidity_pct": {"type": ["number", "null"], "x-unit": "percent", "x-feature-time": "race_start"},
+    "start_pressure_mbar": {"type": ["number", "null"], "x-unit": "millibar", "x-feature-time": "race_start"},
+    "start_rainfall": {"type": ["boolean", "null"], "x-feature-time": "race_start"},
+    "start_wind_speed_ms": {"type": ["number", "null"], "x-unit": "metres_per_second", "x-feature-time": "race_start"},
+    "circuit_prior_races": {"type": "integer", "minimum": 0, "x-feature-time": "pre_race"},
+    "circuit_prior_avg_winner_laps": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "circuit_prior_avg_safety_cars": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "circuit_prior_avg_virtual_safety_cars": {"type": ["number", "null"], "x-feature-time": "pre_race"},
+    "circuit_prior_rain_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "x-feature-time": "pre_race"},
     "classified_position": {"type": "integer", "minimum": 1, "x-feature-time": "post_race", "x-target": true},
     "dataset_split": {"type": "string", "enum": ["train", "test"], "x-role": "split"}
   }

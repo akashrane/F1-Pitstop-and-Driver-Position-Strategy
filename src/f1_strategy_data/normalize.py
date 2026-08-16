@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any, Iterable
 
 
@@ -221,6 +222,71 @@ def normalize_weather(
         "retrieved_at_utc": retrieved_at_utc,
         "validation_status": "verified",
     } for row in source_rows]
+
+
+def normalize_race_context(
+    session_rows: Iterable[dict[str, Any]],
+    race_control_rows: Iterable[dict[str, Any]],
+    weather_rows: Iterable[dict[str, Any]],
+    race: dict[str, Any],
+    session_key: int,
+    source_url: str,
+    retrieved_at_utc: str,
+) -> list[dict[str, Any]]:
+    """Create one race-level context row with explicit feature-time boundaries."""
+    sessions = [row for row in session_rows if int(row["session_key"]) == session_key]
+    if len(sessions) != 1:
+        raise ValueError(f"Expected one OpenF1 session for {session_key}, received {len(sessions)}")
+    session = sessions[0]
+    start = _parse_datetime(session["date_start"])
+    weather = _closest_start_weather(weather_rows, start)
+    messages = [str(row.get("message", "")).upper() for row in race_control_rows]
+    results = race.get("Results", [])
+    winner_laps = _optional_int(results[0].get("laps")) if results else None
+    return [{
+        "season": int(race["season"]),
+        "round_number": int(race["round"]),
+        "session_key": session_key,
+        "meeting_key": _optional_int(session.get("meeting_key")),
+        "circuit_key": _optional_int(session.get("circuit_key")),
+        "circuit_short_name": session.get("circuit_short_name"),
+        "country_code": session.get("country_code"),
+        "country_name": session.get("country_name"),
+        "location": session.get("location"),
+        "session_start_utc": session["date_start"],
+        "start_weather_observed_at_utc": weather.get("date") if weather else None,
+        "start_air_temperature_c": _optional_float(weather.get("air_temperature")) if weather else None,
+        "start_track_temperature_c": _optional_float(weather.get("track_temperature")) if weather else None,
+        "start_humidity_pct": _optional_float(weather.get("humidity")) if weather else None,
+        "start_pressure_mbar": _optional_float(weather.get("pressure")) if weather else None,
+        "start_rainfall": weather.get("rainfall") if weather else None,
+        "start_wind_speed_ms": _optional_float(weather.get("wind_speed")) if weather else None,
+        "winner_laps_completed": winner_laps,
+        "safety_car_deployments": sum(
+            "SAFETY CAR DEPLOYED" in message and "VIRTUAL" not in message for message in messages
+        ),
+        "virtual_safety_car_deployments": sum(
+            "VIRTUAL SAFETY CAR DEPLOYED" in message for message in messages
+        ),
+        "source": "openf1",
+        "source_url": source_url,
+        "retrieved_at_utc": retrieved_at_utc,
+        "validation_status": "verified",
+    }]
+
+
+def _closest_start_weather(
+    rows: Iterable[dict[str, Any]], start: datetime
+) -> dict[str, Any] | None:
+    candidates = [
+        row for row in rows
+        if abs(_parse_datetime(row["date"]) - start) <= timedelta(minutes=15)
+    ]
+    return min(candidates, key=lambda row: abs(_parse_datetime(row["date"]) - start), default=None)
+
+
+def _parse_datetime(value: object) -> datetime:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def _optional_int(value: object) -> int | None:

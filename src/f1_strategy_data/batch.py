@@ -12,7 +12,7 @@ from .discovery import discover_completed_races
 from .pipeline import build_reference_race
 
 
-TABLES = ("race_drivers", "stints", "pit_events", "weather_observations")
+TABLES = ("race_context", "race_drivers", "stints", "pit_events", "weather_observations")
 
 
 def build_seasons(

@@ -56,7 +56,7 @@ def jolpica_pit_stops(season: int, round_number: int) -> tuple[dict[str, Any], d
 
 def openf1(endpoint: str, **filters: object) -> tuple[list[dict[str, Any]], dict[str, str]]:
     """Fetch session-timestamped OpenF1 data such as weather, stints, or pits."""
-    allowed = {"weather", "stints", "pit", "laps", "sessions", "meetings", "drivers", "starting_grid", "session_result"}
+    allowed = {"weather", "stints", "pit", "laps", "sessions", "meetings", "drivers", "starting_grid", "session_result", "race_control"}
     if endpoint not in allowed:
         raise ValueError(f"Unsupported OpenF1 endpoint: {endpoint}")
     query = urlencode({key: value for key, value in filters.items() if value is not None})

@@ -46,3 +46,21 @@ def test_pit_lane_grid_is_not_used_for_positions_gained_history():
     ])
     assert result[1]["driver_prior_avg_grid"] is None
     assert result[1]["driver_prior_avg_positions_gained"] is None
+
+
+def test_race_context_uses_current_weather_but_only_prior_circuit_outcomes():
+    contexts = [
+        {"season": "2025", "round_number": "1", "circuit_key": "7", "start_air_temperature_c": "20", "start_rainfall": "true", "winner_laps_completed": "50", "safety_car_deployments": "1", "virtual_safety_car_deployments": "0"},
+        {"season": "2025", "round_number": "2", "circuit_key": "7", "start_air_temperature_c": "24", "start_rainfall": "false", "winner_laps_completed": "52", "safety_car_deployments": "0", "virtual_safety_car_deployments": "1"},
+    ]
+    result = build_pre_race_finishing_features([
+        _row(2025, 1, "a", "x", 1, 1),
+        _row(2025, 2, "a", "x", 2, 2),
+    ], context_rows=contexts)
+
+    assert result[0]["start_air_temperature_c"] == 20.0
+    assert result[0]["circuit_prior_races"] == 0
+    assert result[1]["start_air_temperature_c"] == 24.0
+    assert result[1]["circuit_prior_avg_winner_laps"] == 50.0
+    assert result[1]["circuit_prior_avg_safety_cars"] == 1.0
+    assert result[1]["circuit_prior_rain_rate"] == 1.0

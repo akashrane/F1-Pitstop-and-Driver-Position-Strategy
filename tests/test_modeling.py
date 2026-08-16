@@ -16,6 +16,7 @@ def _frame(task: str) -> pd.DataFrame:
             "dataset_split": "test" if is_test else "train",
             "driver_id": f"driver-{index % 5}",
             "constructor_id": f"team-{index % 3}",
+            "circuit_key": f"circuit-{index % 4}",
             "current_compound": ["SOFT", "MEDIUM", "HARD"][index % 3],
         }
         for offset, column in enumerate(spec["numeric"]):
@@ -47,7 +48,10 @@ def test_evaluate_task_reports_chronological_metrics(task: str) -> None:
         assert set(report["model"]) >= {"precision", "recall", "f1"}
     if task == "pit_stop_count":
         assert report["model_selection"]["validation_season"] == 2025
-        assert report["model_selection"]["selected_model"] in {"gradient_boosting", "random_forest"}
+        assert report["model_selection"]["selected_model"] in {
+            "gradient_boosting_base", "random_forest_base",
+            "gradient_boosting_context", "random_forest_context",
+        }
 
 
 def test_evaluate_task_rejects_non_chronological_split() -> None:

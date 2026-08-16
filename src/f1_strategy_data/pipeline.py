@@ -15,6 +15,7 @@ from .normalize import (
     normalize_pit_events,
     normalize_jolpica_pit_events,
     normalize_race_drivers,
+    normalize_race_context,
     normalize_stints,
     normalize_weather,
 )
@@ -23,6 +24,7 @@ from .validation import duplicate_key_issues, pit_stop_issues, stint_issues, wea
 
 
 TABLE_KEYS = {
+    "race_context": ("season", "round_number"),
     "race_drivers": ("season", "round_number", "driver_id"),
     "stints": ("session_key", "driver_id", "stint_number"),
     "pit_events": ("session_key", "driver_id", "stop_number"),
@@ -48,6 +50,8 @@ def build_reference_race(
         "jolpica_results": lambda: jolpica_results(season, round_number),
         "jolpica_pits": lambda: jolpica_pit_stops(season, round_number),
         "openf1_results": lambda: openf1("session_result", session_key=session_key),
+        "openf1_session": lambda: openf1("sessions", session_key=session_key),
+        "openf1_race_control": lambda: openf1("race_control", session_key=session_key),
         "openf1_stints": lambda: openf1("stints", session_key=session_key),
         "openf1_pits": lambda: openf1("pit", session_key=session_key),
         "openf1_weather": lambda: openf1("weather", session_key=session_key),
@@ -61,6 +65,10 @@ def build_reference_race(
     )
     completed_laps = {row["driver_id"]: row["laps_completed"] for row in race_drivers}
     tables = {
+        "race_context": normalize_race_context(
+            payloads["openf1_session"], payloads["openf1_race_control"],
+            payloads["openf1_weather"], race, session_key, **provenance["openf1_session"]
+        ),
         "race_drivers": race_drivers,
         "stints": normalize_stints(payloads["openf1_stints"], identifiers, season, round_number, **provenance["openf1_stints"]),
         "pit_events": normalize_jolpica_pit_events(

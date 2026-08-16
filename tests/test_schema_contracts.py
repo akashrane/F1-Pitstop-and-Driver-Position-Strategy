@@ -4,6 +4,7 @@ from pathlib import Path
 
 SCHEMA_DIR = Path(__file__).parents[1] / "schemas"
 EXPECTED = {
+    "race_context.schema.json": {"season", "round_number", "session_key", "circuit_key", "session_start_utc", "source", "source_url", "retrieved_at_utc", "validation_status"},
     "race_drivers.schema.json": {"season", "round_number", "driver_id", "source", "source_url", "retrieved_at_utc", "validation_status"},
     "stints.schema.json": {"session_key", "driver_id", "stint_number", "source", "source_url", "retrieved_at_utc", "validation_status"},
     "pit_events.schema.json": {"session_key", "driver_id", "stop_number", "source", "source_url", "retrieved_at_utc", "validation_status"},

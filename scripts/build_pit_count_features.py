@@ -15,9 +15,11 @@ def main() -> int:
     parser.add_argument("--stints", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("data/features/pre_race_pit_stop_count.csv"))
     parser.add_argument("--holdout-season", type=int)
+    parser.add_argument("--race-context", type=Path)
     args = parser.parse_args()
     count = build_pit_count_feature_file(
-        args.race_drivers, args.pit_events, args.stints, args.output, args.holdout_season
+        args.race_drivers, args.pit_events, args.stints, args.output,
+        args.holdout_season, args.race_context
     )
     print(f"Wrote {count} leakage-safe rows to {args.output}")
     return 0
