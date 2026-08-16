@@ -118,6 +118,7 @@ Build the leakage-safe pre-race finishing-position table from a consolidated
 $env:PYTHONPATH = "src"
 python scripts/build_pre_race_features.py `
   --input data/processed/consolidated_2023_2026/race_drivers.csv `
+  --race-context data/processed/consolidated_2023_2026/race_context.csv `
   --output data/features/pre_race_finishing_position.csv `
   --holdout-season 2026
 ```
@@ -132,6 +133,7 @@ inputs:
 ```powershell
 python scripts/build_pit_count_features.py `
   --race-drivers data/processed/consolidated_2023_2026/race_drivers.csv `
+  --race-context data/processed/consolidated_2023_2026/race_context.csv `
   --pit-events data/processed/consolidated_2023_2026/pit_events.csv `
   --stints data/processed/consolidated_2023_2026/stints.csv `
   --output data/features/pre_race_pit_stop_count.csv `
@@ -185,6 +187,21 @@ adjacent stints. The normalizer preserves that lap as the last completed lap of
 the earlier stint and moves the later stint start forward by one. Each repair
 is retained as an informational validation record; multi-lap overlaps remain
 errors and quarantine the race.
+
+## Phase 6 race context
+
+The canonical `race_context.csv` contains one row per verified race with its
+circuit identity, scheduled UTC start, the nearest trackside weather reading
+within 15 minutes of that start, and post-race safety-car and race-distance
+outcomes. The raw session, weather, and race-control responses remain cached
+with checksums for auditability.
+
+Feature builders use current race-start weather because it is observable at
+lights out. Current-race winner laps and safety-car counts are never used as
+predictors. Instead, the builders calculate rolling circuit history strictly
+from earlier completed races: prior average winner laps, safety-car and virtual
+safety-car deployments, and rain rate. This preserves the chronological
+leakage boundary even when the same circuit appears multiple times.
 
 ## Author
 

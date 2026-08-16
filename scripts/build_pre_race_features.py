@@ -13,8 +13,9 @@ def main() -> int:
     parser.add_argument("--input", type=Path, required=True, help="Consolidated race_drivers.csv")
     parser.add_argument("--output", type=Path, default=Path("data/features/pre_race_finishing_position.csv"))
     parser.add_argument("--holdout-season", type=int, help="This season and later are marked as test")
+    parser.add_argument("--race-context", type=Path)
     args = parser.parse_args()
-    count = build_pre_race_feature_file(args.input, args.output, args.holdout_season)
+    count = build_pre_race_feature_file(args.input, args.output, args.holdout_season, args.race_context)
     print(f"Wrote {count} leakage-safe rows to {args.output}")
     return 0
 

@@ -16,7 +16,12 @@ PRE_RACE_COLUMNS = (
     "driver_prior_avg_positions_gained", "driver_recent5_avg_finish",
     "driver_recent5_avg_grid", "constructor_prior_starts",
     "constructor_prior_avg_finish", "constructor_prior_dnf_rate",
-    "constructor_recent5_avg_finish", "classified_position", "dataset_split",
+    "constructor_recent5_avg_finish", "circuit_key", "start_air_temperature_c",
+    "start_track_temperature_c", "start_humidity_pct", "start_pressure_mbar",
+    "start_rainfall", "start_wind_speed_ms", "circuit_prior_races",
+    "circuit_prior_avg_winner_laps", "circuit_prior_avg_safety_cars",
+    "circuit_prior_avg_virtual_safety_cars", "circuit_prior_rain_rate",
+    "classified_position", "dataset_split",
 )
 
 PIT_COUNT_COLUMNS = (
@@ -25,7 +30,12 @@ PIT_COUNT_COLUMNS = (
     "driver_recent5_avg_pit_stops", "driver_prior_zero_stop_rate",
     "driver_prior_two_plus_stop_rate", "driver_prior_avg_stints",
     "constructor_prior_driver_races", "constructor_prior_avg_pit_stops",
-    "constructor_recent5_avg_pit_stops", "pit_stop_count", "dataset_split",
+    "constructor_recent5_avg_pit_stops", "circuit_key", "start_air_temperature_c",
+    "start_track_temperature_c", "start_humidity_pct", "start_pressure_mbar",
+    "start_rainfall", "start_wind_speed_ms", "circuit_prior_races",
+    "circuit_prior_avg_winner_laps", "circuit_prior_avg_safety_cars",
+    "circuit_prior_avg_virtual_safety_cars", "circuit_prior_rain_rate",
+    "pit_stop_count", "dataset_split",
 )
 
 NEXT_PIT_COLUMNS = (
@@ -37,7 +47,8 @@ NEXT_PIT_COLUMNS = (
 
 
 def build_pre_race_finishing_features(
-    rows: Iterable[dict[str, str]], holdout_season: int | None = None
+    rows: Iterable[dict[str, str]], holdout_season: int | None = None,
+    context_rows: Iterable[dict[str, str]] = (),
 ) -> list[dict[str, object]]:
     """Build rolling features using completed races strictly before each row's race."""
     ordered = sorted(rows, key=lambda row: (
@@ -45,9 +56,14 @@ def build_pre_race_finishing_features(
     ))
     driver_history: dict[str, list[dict[str, object]]] = defaultdict(list)
     constructor_history: dict[str, list[dict[str, object]]] = defaultdict(list)
+    contexts = _context_by_race(context_rows)
+    circuit_history: dict[str, list[dict[str, object]]] = defaultdict(list)
     output: list[dict[str, object]] = []
 
     for race_rows in _group_races(ordered):
+        race_key = (int(race_rows[0]["season"]), int(race_rows[0]["round_number"]))
+        context = contexts.get(race_key)
+        context_features = _context_features(context, circuit_history)
         pending: list[tuple[dict[str, str], dict[str, object]]] = []
         for row in race_rows:
             finish = _required_positive_int(row.get("classified_position"), "classified_position")
@@ -64,6 +80,7 @@ def build_pre_race_finishing_features(
                 "grid_position": _optional_int(row.get("grid_position")),
                 **_history_features("driver", driver),
                 **_history_features("constructor", constructor, recent_grid=False, positions_gained=False),
+                **context_features,
                 "classified_position": finish,
                 "dataset_split": "test" if holdout_season is not None and season >= holdout_season else "train",
             }
@@ -76,13 +93,16 @@ def build_pre_race_finishing_features(
             constructor_id = row.get("constructor_id", "")
             if constructor_id:
                 constructor_history[constructor_id].append(record)
+        _update_circuit_history(context, circuit_history)
     return output
 
 
-def build_pre_race_feature_file(input_path: Path, output_path: Path, holdout_season: int | None = None) -> int:
+def build_pre_race_feature_file(input_path: Path, output_path: Path, holdout_season: int | None = None,
+                                context_path: Path | None = None) -> int:
     with input_path.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    features = build_pre_race_finishing_features(rows, holdout_season)
+    contexts = _read_optional_csv(context_path)
+    features = build_pre_race_finishing_features(rows, holdout_season, contexts)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(PRE_RACE_COLUMNS))
@@ -96,6 +116,7 @@ def build_pit_count_features(
     pit_rows: Iterable[dict[str, str]],
     stint_rows: Iterable[dict[str, str]],
     holdout_season: int | None = None,
+    context_rows: Iterable[dict[str, str]] = (),
 ) -> list[dict[str, object]]:
     """Build pre-race pit-count features and observed stop-count targets."""
     pit_counts = _counts_by_driver_race(pit_rows)
@@ -105,8 +126,13 @@ def build_pit_count_features(
     ))
     driver_history: dict[str, list[dict[str, object]]] = defaultdict(list)
     constructor_history: dict[str, list[dict[str, object]]] = defaultdict(list)
+    contexts = _context_by_race(context_rows)
+    circuit_history: dict[str, list[dict[str, object]]] = defaultdict(list)
     output: list[dict[str, object]] = []
     for current_race in _group_races(ordered):
+        race_key = (int(current_race[0]["season"]), int(current_race[0]["round_number"]))
+        context = contexts.get(race_key)
+        context_features = _context_features(context, circuit_history)
         pending: list[tuple[dict[str, str], dict[str, object]]] = []
         for row in current_race:
             key = _driver_race_key(row)
@@ -125,6 +151,7 @@ def build_pit_count_features(
                 "grid_position": _optional_int(row.get("grid_position")),
                 **_pit_history_features("driver", driver),
                 **_pit_history_features("constructor", constructor),
+                **context_features,
                 "pit_stop_count": stops,
                 "dataset_split": "test" if holdout_season is not None and season >= holdout_season else "train",
             })
@@ -134,18 +161,22 @@ def build_pit_count_features(
             constructor_id = row.get("constructor_id", "")
             if constructor_id:
                 constructor_history[constructor_id].append(record)
+        _update_circuit_history(context, circuit_history)
     return output
 
 
 def build_pit_count_feature_file(
     race_path: Path, pit_path: Path, stint_path: Path, output_path: Path,
     holdout_season: int | None = None,
+    context_path: Path | None = None,
 ) -> int:
     inputs = []
     for path in (race_path, pit_path, stint_path):
         with path.open(encoding="utf-8", newline="") as handle:
             inputs.append(list(csv.DictReader(handle)))
-    features = build_pit_count_features(*inputs, holdout_season=holdout_season)
+    features = build_pit_count_features(
+        *inputs, holdout_season=holdout_season, context_rows=_read_optional_csv(context_path)
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(PIT_COUNT_COLUMNS))
@@ -341,3 +372,60 @@ def _required_positive_int(value: object, field: str) -> int:
     if result is None or result < 1:
         raise ValueError(f"{field} must be a positive integer")
     return result
+
+
+def _read_optional_csv(path: Path | None) -> list[dict[str, str]]:
+    if path is None:
+        return []
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _context_by_race(rows: Iterable[dict[str, str]]) -> dict[tuple[int, int], dict[str, str]]:
+    return {(int(row["season"]), int(row["round_number"])): row for row in rows}
+
+
+def _context_features(
+    context: dict[str, str] | None,
+    histories: dict[str, list[dict[str, object]]],
+) -> dict[str, object]:
+    circuit_key = context.get("circuit_key") if context else None
+    history = histories.get(str(circuit_key), []) if circuit_key not in (None, "") else []
+    return {
+        "circuit_key": _optional_int(circuit_key),
+        "start_air_temperature_c": _optional_float(context.get("start_air_temperature_c") if context else None),
+        "start_track_temperature_c": _optional_float(context.get("start_track_temperature_c") if context else None),
+        "start_humidity_pct": _optional_float(context.get("start_humidity_pct") if context else None),
+        "start_pressure_mbar": _optional_float(context.get("start_pressure_mbar") if context else None),
+        "start_rainfall": _optional_bool(context.get("start_rainfall") if context else None),
+        "start_wind_speed_ms": _optional_float(context.get("start_wind_speed_ms") if context else None),
+        "circuit_prior_races": len(history),
+        "circuit_prior_avg_winner_laps": _average(history, "winner_laps"),
+        "circuit_prior_avg_safety_cars": _average(history, "safety_cars"),
+        "circuit_prior_avg_virtual_safety_cars": _average(history, "virtual_safety_cars"),
+        "circuit_prior_rain_rate": _average(history, "rain"),
+    }
+
+
+def _update_circuit_history(
+    context: dict[str, str] | None,
+    histories: dict[str, list[dict[str, object]]],
+) -> None:
+    if not context or context.get("circuit_key") in (None, ""):
+        return
+    histories[str(context["circuit_key"])].append({
+        "winner_laps": _optional_float(context.get("winner_laps_completed")),
+        "safety_cars": _optional_float(context.get("safety_car_deployments")),
+        "virtual_safety_cars": _optional_float(context.get("virtual_safety_car_deployments")),
+        "rain": float(_optional_bool(context.get("start_rainfall")) or False),
+    })
+
+
+def _optional_float(value: object) -> float | None:
+    return float(str(value)) if value not in (None, "") else None
+
+
+def _optional_bool(value: object) -> bool | None:
+    if value in (None, ""):
+        return None
+    return str(value).strip().lower() in {"true", "1", "yes"}

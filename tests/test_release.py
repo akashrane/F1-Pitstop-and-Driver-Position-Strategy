@@ -16,6 +16,17 @@ def test_release_gate_rejects_failed_build(tmp_path: Path):
     assert validate_manifest(path) == ["1 race build(s) failed"]
 
 
+def test_release_gate_requires_race_context(tmp_path: Path):
+    path = tmp_path / "manifest.json"
+    counts = {table: 1 for table in TABLES}
+    counts["race_context"] = 0
+    path.write_text(json.dumps({
+        "summary": {"verified": 1}, "consolidated_rows": counts,
+    }), encoding="utf-8")
+
+    assert validate_manifest(path) == ["consolidated table race_context is empty"]
+
+
 def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     processed = tmp_path / "data" / "processed"
     source = processed / "consolidated_2023_2026"
@@ -59,7 +70,7 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     assert metadata["expectedUpdateFrequency"] == "weekly"
     assert "keywords" not in metadata
     assert [resource["path"] for resource in metadata["resources"]] == [
-        "pit_events.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "provenance.csv"
+        "pit_events.csv", "race_context.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "provenance.csv"
     ]
     race_fields = next(item for item in metadata["resources"] if item["path"] == "race_drivers.csv")["schema"]["fields"]
     assert race_fields[0] == {
@@ -78,7 +89,7 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     assert not {"source_url", "retrieved_at_utc", "validation_status"} & weather_headers
     with (destination / "provenance.csv").open(encoding="utf-8", newline="") as handle:
         provenance = list(csv.DictReader(handle))
-    assert len(provenance) == 4
+    assert len(provenance) == 5
     assert {row["table"] for row in provenance} == set(TABLES)
     assert (destination / "README.md").exists()
     with (destination / "data_dictionary.csv").open(encoding="utf-8", newline="") as handle:

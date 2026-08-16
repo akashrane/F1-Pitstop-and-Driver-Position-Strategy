@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 
 
-REQUIRED_TABLES = ("race_drivers", "stints", "pit_events", "weather_observations")
+REQUIRED_TABLES = (
+    "race_context", "race_drivers", "stints", "pit_events", "weather_observations"
+)
 
 
 def validate_manifest(path: Path) -> list[str]:

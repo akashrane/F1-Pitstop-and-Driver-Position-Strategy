@@ -2,6 +2,7 @@ from f1_strategy_data.normalize import (
     count_shared_stint_boundaries,
     driver_number_map,
     normalize_pit_events,
+    normalize_race_context,
     normalize_jolpica_pit_events,
     normalize_stints,
     normalize_weather,
@@ -57,3 +58,31 @@ def test_jolpica_pit_event_is_kept_when_openf1_event_is_missing():
     assert len(rows) == 1
     assert rows[0]["pit_duration_s"] == 21.878
     assert rows[0]["validation_status"] == "warning"
+
+
+def test_race_context_uses_nearest_start_weather_and_counts_safety_cars():
+    sessions = [{
+        "session_key": 1, "meeting_key": 2, "circuit_key": 3,
+        "circuit_short_name": "Test Circuit", "country_code": "TST",
+        "country_name": "Testland", "location": "Test City",
+        "date_start": "2026-07-26T13:00:00+00:00",
+    }]
+    weather = [
+        {"date": "2026-07-26T12:50:00+00:00", "air_temperature": 20},
+        {"date": "2026-07-26T13:01:00+00:00", "air_temperature": 24, "rainfall": True},
+    ]
+    controls = [
+        {"message": "SAFETY CAR DEPLOYED"},
+        {"message": "VIRTUAL SAFETY CAR DEPLOYED"},
+        {"message": "SAFETY CAR IN THIS LAP"},
+    ]
+    row = normalize_race_context(
+        sessions, controls, weather, RACE, 1, **PROVENANCE
+    )[0]
+
+    assert row["circuit_key"] == 3
+    assert row["start_air_temperature_c"] == 24.0
+    assert row["start_rainfall"] is True
+    assert row["safety_car_deployments"] == 1
+    assert row["virtual_safety_car_deployments"] == 1
+    assert row["winner_laps_completed"] == 70
