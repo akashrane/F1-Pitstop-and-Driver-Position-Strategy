@@ -1,4 +1,5 @@
 from f1_strategy_data.normalize import (
+    count_shared_stint_boundaries,
     driver_number_map,
     normalize_pit_events,
     normalize_jolpica_pit_events,
@@ -35,6 +36,17 @@ def test_openf1_tables_use_canonical_units_and_ids():
     assert stints[0]["driver_id"] == "norris"
     assert pits[0]["pit_duration_s"] == 21.2
     assert weather[0]["wind_speed_ms"] == 3.2
+
+
+def test_shared_stint_boundary_is_assigned_to_previous_stint_only():
+    source_rows = [
+        {"session_key": 1, "driver_number": 4, "stint_number": 1, "compound": "MEDIUM", "lap_start": 1, "lap_end": 20, "tyre_age_at_start": 0},
+        {"session_key": 1, "driver_number": 4, "stint_number": 2, "compound": "HARD", "lap_start": 20, "lap_end": 40, "tyre_age_at_start": 0},
+    ]
+    rows = normalize_stints(source_rows, {4: "norris"}, 2026, 11, **PROVENANCE)
+
+    assert [(row["lap_start"], row["lap_end"]) for row in rows] == [(1, 20), (21, 40)]
+    assert count_shared_stint_boundaries(source_rows, {4: "norris"}) == 1
 
 
 def test_jolpica_pit_event_is_kept_when_openf1_event_is_missing():

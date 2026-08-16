@@ -74,7 +74,7 @@ def normalize_stints(
     source_url: str,
     retrieved_at_utc: str,
 ) -> list[dict[str, Any]]:
-    return [{
+    rows = [{
         "season": season,
         "round_number": round_number,
         "session_key": int(row["session_key"]),
@@ -89,6 +89,37 @@ def normalize_stints(
         "retrieved_at_utc": retrieved_at_utc,
         "validation_status": "verified",
     } for row in source_rows if int(row["driver_number"]) in identifiers]
+    by_driver: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        by_driver.setdefault((row["session_key"], row["driver_id"]), []).append(row)
+    for driver_rows in by_driver.values():
+        ordered = sorted(driver_rows, key=lambda row: (row["stint_number"], row["lap_start"]))
+        for previous, current in zip(ordered, ordered[1:]):
+            # Some OpenF1 historical records assign the pit lap to both stints.
+            # Keep it as the completed lap of the old stint and begin the new
+            # stint on the following lap. Larger overlaps remain validation errors.
+            if current["lap_start"] == previous["lap_end"]:
+                current["lap_start"] += 1
+    return rows
+
+
+def count_shared_stint_boundaries(
+    source_rows: Iterable[dict[str, Any]], identifiers: dict[int, str]
+) -> int:
+    """Count adjacent source stints sharing exactly one boundary lap."""
+    by_driver: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
+    for row in source_rows:
+        driver_number = int(row["driver_number"])
+        if driver_number in identifiers:
+            key = (int(row["session_key"]), driver_number)
+            by_driver.setdefault(key, []).append(
+                (int(row["stint_number"]), int(row["lap_start"]), int(row["lap_end"]))
+            )
+    return sum(
+        current[1] == previous[2]
+        for spans in by_driver.values()
+        for previous, current in zip(sorted(spans), sorted(spans)[1:])
+    )
 
 
 def normalize_pit_events(
