@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .normalize import (
+    count_shared_stint_boundaries,
     driver_number_map,
     jolpica_race,
     normalize_pit_events,
@@ -70,6 +71,15 @@ def build_reference_race(
     }
 
     issue_records: list[dict[str, Any]] = []
+    adjusted_boundaries = count_shared_stint_boundaries(payloads["openf1_stints"], identifiers)
+    if adjusted_boundaries:
+        issue_records.append({
+            "severity": "info",
+            "code": "normalized_shared_stint_boundary",
+            "table": "stints",
+            "count": adjusted_boundaries,
+            "message": "Moved later stint starts one lap forward where OpenF1 assigned a boundary lap to both stints",
+        })
     for table, rows in tables.items():
         issue_records.extend(issue.__dict__ | {"table": table} for issue in duplicate_key_issues(rows, TABLE_KEYS[table]))
     issue_records.extend(issue.__dict__ | {"table": "pit_events"} for issue in pit_stop_issues(tables["pit_events"]))
@@ -94,7 +104,7 @@ def build_reference_race(
         "issues": issue_records,
         "status": (
             "quarantined" if any(issue["severity"] == "error" for issue in issue_records)
-            else "warning" if issue_records
+            else "warning" if any(issue["severity"] == "warning" for issue in issue_records)
             else "verified"
         ),
     }

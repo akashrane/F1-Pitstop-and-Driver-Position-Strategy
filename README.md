@@ -173,9 +173,18 @@ python scripts/train_baselines.py `
 The command compares a simple dummy baseline with a gradient-boosted
 model and writes `reports/generated/baseline_metrics.json`. Regression tasks
 report MAE and RMSE. The imbalanced next-pit classifier reports average
-precision, Brier score, accuracy, and F1. Fixed feature allowlists exclude all
+precision, Brier score, accuracy, precision, recall, and F1. Its probability
+threshold is selected on the latest training season, never the test season.
+The pit-count task similarly chooses between gradient boosting and a random
+forest using that internal chronological validation season. Fixed feature allowlists exclude all
 targets, identifiers used only for joining, and post-race fields. Training is
 rejected unless every training season precedes every test season.
+
+Historical OpenF1 stints sometimes assign the same boundary lap to two
+adjacent stints. The normalizer preserves that lap as the last completed lap of
+the earlier stint and moves the later stint start forward by one. Each repair
+is retained as an informational validation record; multi-lap overlaps remain
+errors and quarantine the race.
 
 ## Author
 
