@@ -70,7 +70,7 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     assert metadata["expectedUpdateFrequency"] == "weekly"
     assert "keywords" not in metadata
     assert [resource["path"] for resource in metadata["resources"]] == [
-        "pit_events.csv", "race_context.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "provenance.csv"
+        "pit_events.csv", "race_context.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "coverage.csv", "provenance.csv"
     ]
     race_fields = next(item for item in metadata["resources"] if item["path"] == "race_drivers.csv")["schema"]["fields"]
     assert race_fields[0] == {
@@ -92,6 +92,10 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     assert len(provenance) == 5
     assert {row["table"] for row in provenance} == set(TABLES)
     assert (destination / "README.md").exists()
+    with (destination / "coverage.csv").open(encoding="utf-8", newline="") as handle:
+        coverage = list(csv.DictReader(handle))
+    assert len(coverage) == len(TABLES)
+    assert {row["table"] for row in coverage} == set(TABLES)
     with (destination / "data_dictionary.csv").open(encoding="utf-8", newline="") as handle:
         dictionary = list(csv.DictReader(handle))
     classified = next(row for row in dictionary if row["table"] == "race_drivers" and row["column"] == "classified_position")

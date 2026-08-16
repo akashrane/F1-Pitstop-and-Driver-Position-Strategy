@@ -11,7 +11,7 @@ from f1_strategy_data.batch import build_seasons
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--start-year", type=int, default=2023)
+    parser.add_argument("--start-year", type=int, default=1950)
     parser.add_argument("--end-year", type=int, default=2026)
     parser.add_argument("--data-root", type=Path, default=Path("data"))
     parser.add_argument("--fail-fast", action="store_true")

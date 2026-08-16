@@ -7,6 +7,7 @@ TABLE_DESCRIPTIONS = {
     "pit_events": "One row per observed pit-lane visit, including stop order, lap, and available durations.",
     "weather_observations": "Timestamped trackside weather observations recorded during race sessions.",
     "provenance": "Compact source and retrieval metadata removed from the analysis-ready CSV files.",
+    "coverage": "Per-table season coverage and row counts; unavailable historical telemetry is not represented as zero.",
 }
 
 PUBLIC_EXCLUDED_COLUMNS = {"source", "source_url", "retrieved_at_utc", "validation_status"}
@@ -22,6 +23,7 @@ COLUMN_DESCRIPTIONS = {
     "session_key": "OpenF1 identifier for the race session; null where that source has no session identifier.",
     "meeting_key": "OpenF1 identifier for the Grand Prix meeting.",
     "circuit_key": "OpenF1 identifier for the circuit configuration.",
+    "circuit_id": "Stable Jolpica circuit identifier available across historical seasons.",
     "circuit_short_name": "Short name of the circuit used by OpenF1.",
     "country_code": "Three-letter country code supplied for the meeting.",
     "country_name": "Country hosting the race meeting.",
@@ -38,6 +40,7 @@ COLUMN_DESCRIPTIONS = {
     "safety_car_deployments": "Number of full safety-car deployment messages during the race.",
     "virtual_safety_car_deployments": "Number of virtual safety-car deployment messages during the race.",
     "driver_id": "Stable lowercase driver identifier used across canonical tables.",
+    "car_number": "Car or entry number used by the driver in that race; part of the historical entry key.",
     "driver_name": "Driver's displayed full name.",
     "constructor_id": "Stable lowercase constructor or team identifier.",
     "grid_position": "Official starting-grid position; 0 denotes a pit-lane start where supplied by the source.",
@@ -68,13 +71,18 @@ COLUMN_DESCRIPTIONS = {
     "retrieved_at_utc": "UTC timestamp at which the source response was retrieved.",
     "validation_status": "Data-quality state: verified, warning, quarantined, or unavailable.",
     "table": "Canonical table from which the provenance record was extracted.",
+    "earliest_season": "Earliest season containing an observed row in the table.",
+    "latest_season": "Latest season containing an observed row in the table.",
+    "row_count": "Number of published rows in the table.",
+    "availability_note": "Known source-coverage boundary and interpretation guidance.",
 }
 
 DATASET_TITLE = "Formula 1 Pit Stop Dataset"
-DATASET_SUBTITLE = "Validated F1 pit stops, tyre stints, race results and trackside weather"
+DATASET_SUBTITLE = "F1 results since 1950, pit stops since 2011 and detailed telemetry since 2023"
 DATASET_DESCRIPTION = (
-    "Accuracy-first Formula 1 tables for pit-stop and finishing-position modelling. "
-    "The latest release contains only races that passed automated validation; warning "
-    "and quarantined races remain documented in validation_manifest.json. Source URLs, "
-    "retrieval timestamps, feature timing, nullability, and units are included for auditability."
+    "Accuracy-first Formula 1 tables for pit-stop and finishing-position modelling from 1950 "
+    "through the current season. Official race entries and circuit metadata begin in 1950, "
+    "recorded pit events begin in 2011, and detailed tyre, trackside weather, and race-control "
+    "coverage begins in 2023. Unavailable historical telemetry is left absent rather than "
+    "converted to false zeros. coverage.csv and validation_manifest.json document every boundary."
 )

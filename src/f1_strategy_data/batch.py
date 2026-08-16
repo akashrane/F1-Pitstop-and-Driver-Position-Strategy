@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .discovery import discover_completed_races
-from .pipeline import build_reference_race
+from .pipeline import build_historical_season, build_reference_race
 
 
 TABLES = ("race_context", "race_drivers", "stints", "pit_events", "weather_observations")
@@ -24,6 +24,28 @@ def build_seasons(
 ) -> dict[str, Any]:
     runs: list[dict[str, Any]] = []
     for season in range(start_year, end_year + 1):
+        print(f"Building season {season} ({season - start_year + 1}/{end_year - start_year + 1})", flush=True)
+        if season < 2023:
+            try:
+                reports = build_historical_season(season, root, refresh=refresh)
+                runs.extend({
+                    "season": season,
+                    "round_number": report["round_number"],
+                    "race_name": report.get("race_name", ""),
+                    "race_date": report.get("race_date", ""),
+                    "detailed_source_status": "historical_results_only",
+                    "status": report["status"],
+                    "table_rows": report["table_rows"],
+                    "issues": report["issues"],
+                } for report in reports)
+            except Exception as error:
+                runs.append({
+                    "season": season, "round_number": 0,
+                    "status": "failed", "reason": f"{type(error).__name__}: {error}",
+                })
+                if not continue_on_error:
+                    raise
+            continue
         for race in discover_completed_races(season):
             record = race.as_dict()
             if race.session_key is None:
@@ -60,10 +82,10 @@ def consolidate(
     end_year: int,
     allowed_statuses: tuple[str, ...] = ("verified",),
 ) -> dict[str, int]:
-    """Combine only publication-safe race outputs.
+    """Combine publication-safe tables independently.
 
-    Warning and quarantined races stay available in their per-race folders for
-    investigation, but must not silently enter model-training data.
+    A defect in telemetry must not delete an independently valid official race
+    result. A table is excluded only when that table has an error-level issue.
     """
     destination = root / "processed" / f"consolidated_{start_year}_{end_year}"
     destination.mkdir(parents=True, exist_ok=True)
@@ -77,7 +99,13 @@ def consolidate(
             if not report_path.exists():
                 continue
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            if report.get("status") not in allowed_statuses:
+            if report.get("status") == "failed":
+                continue
+            table_errors = [
+                issue for issue in report.get("issues", [])
+                if issue.get("severity") == "error" and issue.get("table") == table
+            ]
+            if table_errors:
                 continue
             with path.open("r", encoding="utf-8", newline="") as handle:
                 rows.extend(csv.DictReader(handle))

@@ -73,13 +73,33 @@ Build every completed race in a season range and create verified-only consolidat
 
 ```powershell
 $env:PYTHONPATH = "src"
-python scripts/build_seasons.py --start-year 2023 --end-year 2026
+python scripts/build_seasons.py --start-year 1950 --end-year 2026
 ```
 
 Raw responses and their provenance are cached per race. Use `--refresh` only
 when intentionally taking new source snapshots. Each run writes a manifest;
 warning and quarantined races remain available for investigation but are
 excluded from the model-ready consolidated tables.
+
+## Historical coverage
+
+The unified release covers 1950 through the latest completed 2026 race without
+pretending that modern telemetry exists for early seasons:
+
+- `race_drivers.csv`: official classified entries from 1950 onward.
+- `race_context.csv`: circuit and schedule metadata from 1950; race-start
+  weather and safety-car fields are populated from 2023 onward.
+- `pit_events.csv`: recorded pit-stop events from 2011 onward. Missing rows
+  before 2011 mean unavailable source coverage, never zero stops.
+- `stints.csv` and `weather_observations.csv`: detailed OpenF1 coverage from
+  2023 onward.
+- `coverage.csv`: exact observed minimum/maximum season and row count for every
+  published table.
+
+Pre-2023 results use two paginated season-level Jolpica snapshots, while pit
+events from 2011–2022 use the supported per-race endpoint. Early races may
+contain multiple entries for the same driver, so `car_number` is retained as
+part of the historical entry identity.
 
 ## Automated updates
 

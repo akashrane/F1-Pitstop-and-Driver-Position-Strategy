@@ -2,6 +2,7 @@ from f1_strategy_data.normalize import (
     count_shared_stint_boundaries,
     driver_number_map,
     normalize_pit_events,
+    normalize_historical_race_context,
     normalize_race_context,
     normalize_jolpica_pit_events,
     normalize_stints,
@@ -60,6 +61,16 @@ def test_jolpica_pit_event_is_kept_when_openf1_event_is_missing():
     assert rows[0]["validation_status"] == "warning"
 
 
+def test_historical_minute_pit_duration_is_converted_to_seconds():
+    payload = {"MRData": {"RaceTable": {"Races": [{"PitStops": [
+        {"driverId": "norris", "lap": "10", "stop": "1", "duration": "1:02.500"}
+    ]}]}}}
+    row = normalize_jolpica_pit_events(
+        payload, [], {}, {"norris": 70}, 2011, 1, None, **PROVENANCE
+    )[0]
+    assert row["pit_duration_s"] == 62.5
+
+
 def test_race_context_uses_nearest_start_weather_and_counts_safety_cars():
     sessions = [{
         "session_key": 1, "meeting_key": 2, "circuit_key": 3,
@@ -86,3 +97,20 @@ def test_race_context_uses_nearest_start_weather_and_counts_safety_cars():
     assert row["safety_car_deployments"] == 1
     assert row["virtual_safety_car_deployments"] == 1
     assert row["winner_laps_completed"] == 70
+
+
+def test_historical_context_preserves_circuit_without_telemetry():
+    race = {
+        **RACE,
+        "date": "1950-05-13",
+        "Circuit": {
+            "circuitId": "silverstone", "circuitName": "Silverstone Circuit",
+            "Location": {"locality": "Silverstone", "country": "UK"},
+        },
+    }
+    row = normalize_historical_race_context(race, **PROVENANCE)[0]
+
+    assert row["circuit_id"] == "silverstone"
+    assert row["session_key"] is None
+    assert row["start_air_temperature_c"] is None
+    assert row["safety_car_deployments"] is None

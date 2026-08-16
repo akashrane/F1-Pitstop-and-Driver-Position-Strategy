@@ -36,6 +36,7 @@ def prepare_release(
     resources = []
     dictionary_rows = []
     provenance_rows: list[dict[str, str]] = []
+    coverage_rows: list[dict[str, object]] = []
     for path in sorted(source.glob("*.csv")):
         table = path.stem
         schema = _read_schema(schema_root / f"{table}.schema.json")
@@ -50,6 +51,32 @@ def prepare_release(
             "schema": {"fields": fields},
         })
         dictionary_rows.extend(_dictionary_rows(table, path.name, fields, schema))
+        seasons = [int(row["season"]) for row in rows]
+        coverage_rows.append({
+            "table": table,
+            "earliest_season": min(seasons),
+            "latest_season": max(seasons),
+            "row_count": len(rows),
+            "availability_note": _coverage_note(table),
+        })
+    coverage_fields = [
+        {"name": "table", "type": "string", "description": COLUMN_DESCRIPTIONS["table"]},
+        {"name": "earliest_season", "type": "integer", "description": COLUMN_DESCRIPTIONS["earliest_season"]},
+        {"name": "latest_season", "type": "integer", "description": COLUMN_DESCRIPTIONS["latest_season"]},
+        {"name": "row_count", "type": "integer", "description": COLUMN_DESCRIPTIONS["row_count"]},
+        {"name": "availability_note", "type": "string", "description": COLUMN_DESCRIPTIONS["availability_note"]},
+    ]
+    _write_rows(destination / "coverage.csv", coverage_rows, [field["name"] for field in coverage_fields])
+    resources.append({
+        "path": "coverage.csv", "description": TABLE_DESCRIPTIONS["coverage"],
+        "schema": {"fields": coverage_fields},
+    })
+    dictionary_rows.extend({
+        "table": "coverage", "file": "coverage.csv", "column": field["name"],
+        "type": field["type"], "nullable": False,
+        "description": field["description"], "feature_time": "", "role": "",
+        "target": False, "unit": "", "allowed_values": "",
+    } for field in coverage_fields)
     provenance_rows = _deduplicate_rows(provenance_rows, PROVENANCE_COLUMNS)
     _write_rows(destination / "provenance.csv", provenance_rows, PROVENANCE_COLUMNS)
     provenance_fields = _provenance_fields()
@@ -74,6 +101,16 @@ def prepare_release(
     (destination / "dataset-metadata.json").write_text(
         json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
     )
+
+
+def _coverage_note(table: str) -> str:
+    return {
+        "race_context": "Race and circuit metadata from 1950; detailed start weather and safety-car fields from 2023.",
+        "race_drivers": "Official classified race entries from 1950.",
+        "pit_events": "Recorded pit-stop events from 2011; absence before 2011 means unavailable, not zero stops.",
+        "stints": "Detailed tyre-stint timing from OpenF1 coverage beginning in 2023.",
+        "weather_observations": "Minute-level trackside OpenF1 weather beginning in 2023.",
+    }[table]
 
 
 def _read_existing_metadata(path: Path | None) -> dict:
@@ -223,7 +260,7 @@ Validated canonical data for completed Formula 1 races from {start_year} through
 
 ## Quality policy
 
-Only verified races enter the published analysis-ready CSV tables. Warning, quarantined, failed, and unavailable races are retained in the validation manifest rather than silently filled or presented as verified. Repeated source URLs, retrieval timestamps, and validation fields are removed from the analysis-ready tables and preserved compactly in `provenance.csv`.
+Canonical tables are admitted independently: a telemetry defect cannot delete an independently valid official race result. A table with an error-level issue remains excluded for that race, and every issue stays visible in the validation manifest. Repeated source URLs, retrieval timestamps, and validation fields are removed from the analysis-ready tables and preserved compactly in `provenance.csv`.
 
 ## Modelling boundary
 
