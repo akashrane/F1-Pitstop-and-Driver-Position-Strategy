@@ -2,6 +2,7 @@ import csv
 import json
 from pathlib import Path
 
+import f1_strategy_data.batch as batch
 from f1_strategy_data.batch import consolidate
 
 
@@ -28,3 +29,16 @@ def test_consolidate_combines_round_files(tmp_path: Path):
     assert output.exists()
     with output.open(encoding="utf-8", newline="") as handle:
         assert [row["driver_id"] for row in csv.DictReader(handle)] == ["driver-1"]
+
+
+def test_discovery_failure_is_recorded_without_aborting_manifest(tmp_path: Path, monkeypatch):
+    def fail_discovery(season):
+        raise RuntimeError("rate limited")
+
+    monkeypatch.setattr(batch, "discover_completed_races", fail_discovery)
+    manifest = batch.build_seasons(2023, 2023, tmp_path)
+
+    assert manifest["summary"] == {"failed": 1}
+    assert manifest["runs"][0]["race_name"] == "season discovery"
+    assert manifest["runs"][0]["reason"] == "RuntimeError: rate limited"
+    assert (tmp_path / "processed" / "manifest_2023_2023.json").exists()

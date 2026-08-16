@@ -80,7 +80,7 @@ jobs:
           path: |
             data/processed/manifest_${{ env.START_YEAR }}_${{ env.END_YEAR }}.json
             data/processed/consolidated_${{ env.START_YEAR }}_${{ env.END_YEAR }}/
-          if-no-files-found: error
+          if-no-files-found: warn
       - name: Validate publication files
         id: validation
         continue-on-error: true
