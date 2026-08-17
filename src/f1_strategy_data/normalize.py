@@ -20,8 +20,9 @@ def driver_number_map(race: dict[str, Any]) -> dict[int, str]:
         # OpenF1 keys records by the number used at the event. This can differ
         # from a driver's permanent number (for example, the champion's 1).
         number = result.get("number") or driver.get("permanentNumber")
-        if number is not None:
-            mapping[int(number)] = driver["driverId"]
+        numeric_number = _optional_int(number)
+        if numeric_number is not None:
+            mapping[numeric_number] = driver["driverId"]
     return mapping
 
 
@@ -41,7 +42,7 @@ def normalize_race_drivers(
     for result in race.get("Results", []):
         driver = result["Driver"]
         number_value = result.get("number") or driver.get("permanentNumber")
-        number = int(number_value) if number_value is not None else None
+        number = _optional_int(number_value)
         openf1_row = by_number.get(number) if number is not None else None
         jolpica_position = _optional_int(result.get("position"))
         openf1_position = _optional_int(openf1_row.get("position")) if openf1_row else None
@@ -56,7 +57,7 @@ def normalize_race_drivers(
             "round_number": int(race["round"]),
             "session_key": session_key,
             "driver_id": driver["driverId"],
-            "car_number": str(number_value) if number_value is not None else None,
+            "car_number": str(number) if number is not None else None,
             "driver_name": f"{driver['givenName']} {driver['familyName']}",
             "constructor_id": result.get("Constructor", {}).get("constructorId"),
             "grid_position": _optional_int(result.get("grid")),
@@ -339,11 +340,15 @@ def _parse_datetime(value: object) -> datetime:
 
 
 def _optional_int(value: object) -> int | None:
-    return None if value in (None, "") else int(value)
+    if value is None or str(value).strip().lower() in ("", "none", "null", "nan"):
+        return None
+    return int(value)
 
 
 def _optional_float(value: object) -> float | None:
-    return None if value in (None, "") else float(value)
+    if value is None or str(value).strip().lower() in ("", "none", "null", "nan"):
+        return None
+    return float(value)
 
 
 def _duration_seconds(value: object) -> float | None:

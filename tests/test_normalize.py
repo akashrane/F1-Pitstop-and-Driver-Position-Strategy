@@ -3,6 +3,7 @@ from f1_strategy_data.normalize import (
     driver_number_map,
     normalize_pit_events,
     normalize_historical_race_context,
+    normalize_race_drivers,
     normalize_race_context,
     normalize_jolpica_pit_events,
     normalize_stints,
@@ -28,6 +29,28 @@ PROVENANCE = {"source_url": "https://example.test/source", "retrieved_at_utc": "
 
 def test_driver_number_map_uses_event_number_not_permanent_number():
     assert driver_number_map(RACE) == {1: "norris"}
+
+
+def test_literal_none_car_number_is_preserved_as_missing():
+    race = {
+        **RACE,
+        "season": "1961",
+        "Results": [{
+            **RACE["Results"][0],
+            "number": "None",
+            "Driver": {
+                **RACE["Results"][0]["Driver"],
+                "permanentNumber": None,
+            },
+        }],
+    }
+
+    rows, mismatches = normalize_race_drivers(race, [], None, **PROVENANCE)
+
+    assert driver_number_map(race) == {}
+    assert rows[0]["car_number"] is None
+    assert rows[0]["classified_position"] == 1
+    assert mismatches == []
 
 
 def test_openf1_tables_use_canonical_units_and_ids():

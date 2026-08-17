@@ -46,7 +46,20 @@ def build_seasons(
                 if not continue_on_error:
                     raise
             continue
-        for race in discover_completed_races(season):
+        try:
+            completed_races = discover_completed_races(season)
+        except Exception as error:
+            runs.append({
+                "season": season,
+                "round_number": 0,
+                "race_name": "season discovery",
+                "status": "failed",
+                "reason": f"{type(error).__name__}: {error}",
+            })
+            if not continue_on_error:
+                raise
+            continue
+        for race in completed_races:
             record = race.as_dict()
             if race.session_key is None:
                 record.update(status="unavailable", reason="OpenF1 detailed session coverage is unavailable; FastF1 backfill required")

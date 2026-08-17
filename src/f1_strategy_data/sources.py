@@ -18,10 +18,10 @@ from urllib.error import HTTPError, URLError
 
 USER_AGENT = "f1-strategy-weather-data/0.1 (+https://github.com/akashrane/F1-Pitstop-and-Driver-Position-Strategy)"
 _LAST_REQUEST_AT: dict[str, float] = {}
-_MIN_INTERVAL_SECONDS = {"api.openf1.org": 2.1, "api.jolpi.ca": 0.25}
+_MIN_INTERVAL_SECONDS = {"api.openf1.org": 2.1, "api.jolpi.ca": 0.5}
 
 
-def _get_json(url: str, timeout: int = 60, attempts: int = 6) -> tuple[Any, dict[str, str]]:
+def _get_json(url: str, timeout: int = 60, attempts: int = 8) -> tuple[Any, dict[str, str]]:
     for attempt in range(attempts):
         _throttle(url)
         request = Request(url, headers={"User-Agent": USER_AGENT})
@@ -34,12 +34,15 @@ def _get_json(url: str, timeout: int = 60, attempts: int = 6) -> tuple[Any, dict
             if not retryable or attempt == attempts - 1:
                 raise
             retry_after = error.headers.get("Retry-After")
-            delay = float(retry_after) if retry_after else min(2 ** attempt, 30)
+            try:
+                delay = float(retry_after) if retry_after else min(2 ** attempt, 60)
+            except ValueError:
+                delay = min(2 ** attempt, 60)
             time.sleep(delay)
         except (URLError, TimeoutError, socket.timeout):
             if attempt == attempts - 1:
                 raise
-            time.sleep(min(2 ** attempt, 30))
+            time.sleep(min(2 ** attempt, 60))
     provenance = {
         "source_url": url,
         "retrieved_at_utc": datetime.now(UTC).isoformat(),
