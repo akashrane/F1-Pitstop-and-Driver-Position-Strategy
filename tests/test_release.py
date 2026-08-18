@@ -46,7 +46,15 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
             writer = csv.DictWriter(handle, fieldnames=headers)
             writer.writeheader()
             writer.writerow(values)
-    (processed / "manifest_2023_2026.json").write_text("{}\n", encoding="utf-8")
+    (processed / "manifest_2023_2026.json").write_text(json.dumps({
+        "runs": [{
+            "season": 2026, "round_number": 1, "race_name": "Test Grand Prix",
+            "status": "warning", "issues": [{
+                "severity": "warning", "code": "source_mismatch", "table": "pit_events",
+                "message": "Two sources disagree",
+            }],
+        }],
+    }) + "\n", encoding="utf-8")
     existing_metadata = tmp_path / "current-metadata.json"
     existing_metadata.write_text(json.dumps({
         "title": "Existing Dataset Title",
@@ -70,7 +78,7 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     assert metadata["expectedUpdateFrequency"] == "weekly"
     assert "keywords" not in metadata
     assert [resource["path"] for resource in metadata["resources"]] == [
-        "pit_events.csv", "race_context.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "coverage.csv", "provenance.csv"
+        "pit_events.csv", "race_context.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "coverage.csv", "data_quality_issues.csv", "provenance.csv"
     ]
     race_fields = next(item for item in metadata["resources"] if item["path"] == "race_drivers.csv")["schema"]["fields"]
     assert race_fields[0] == {
@@ -96,6 +104,14 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
         coverage = list(csv.DictReader(handle))
     assert len(coverage) == len(TABLES)
     assert {row["table"] for row in coverage} == set(TABLES)
+    with (destination / "data_quality_issues.csv").open(encoding="utf-8", newline="") as handle:
+        quality = list(csv.DictReader(handle))
+    assert quality == [{
+        "season": "2026", "round_number": "1", "race_name": "Test Grand Prix",
+        "run_status": "warning", "severity": "warning", "affected_table": "pit_events",
+        "issue_code": "source_mismatch", "issue_message": "Two sources disagree",
+        "resolution": "included_with_warning",
+    }]
     with (destination / "data_dictionary.csv").open(encoding="utf-8", newline="") as handle:
         dictionary = list(csv.DictReader(handle))
     classified = next(row for row in dictionary if row["table"] == "race_drivers" and row["column"] == "classified_position")

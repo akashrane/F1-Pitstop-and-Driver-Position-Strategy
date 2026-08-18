@@ -32,15 +32,14 @@ def discover_completed_races(season: int, as_of: datetime | None = None) -> list
             sessions, _ = openf1("sessions", year=season, session_name="Race")
         except Exception:
             sessions = []
-    sessions_by_date = {
-        row["date_start"][:10]: row
-        for row in sessions
+    completed_sessions = [
+        row for row in sessions
         if not row.get("is_cancelled", False) and _parse_time(row["date_end"]) <= as_of
-    }
+    ]
     refs: list[RaceRef] = []
     for race in races:
         race_date = race["date"]
-        session = sessions_by_date.get(race_date)
+        session = _match_session_date(race_date, completed_sessions)
         refs.append(RaceRef(
             season=season,
             round_number=int(race["round"]),
@@ -54,4 +53,19 @@ def discover_completed_races(season: int, as_of: datetime | None = None) -> list
 
 def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _match_session_date(
+    local_race_date: str, sessions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Match local calendar dates while allowing a race to cross midnight UTC."""
+    race_day = datetime.fromisoformat(local_race_date).date()
+    exact = [row for row in sessions if _parse_time(row["date_start"]).date() == race_day]
+    if len(exact) == 1:
+        return exact[0]
+    adjacent = [
+        row for row in sessions
+        if abs((_parse_time(row["date_start"]).date() - race_day).days) == 1
+    ]
+    return adjacent[0] if not exact and len(adjacent) == 1 else None
 

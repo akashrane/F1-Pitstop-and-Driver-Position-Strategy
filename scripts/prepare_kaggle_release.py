@@ -77,6 +77,35 @@ def prepare_release(
         "description": field["description"], "feature_time": "", "role": "",
         "target": False, "unit": "", "allowed_values": "",
     } for field in coverage_fields)
+    manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+    quality_fields = [
+        {"name": "season", "type": "integer", "description": COLUMN_DESCRIPTIONS["season"]},
+        {"name": "round_number", "type": "integer", "description": COLUMN_DESCRIPTIONS["round_number"]},
+        {"name": "race_name", "type": "string", "description": COLUMN_DESCRIPTIONS["race_name"]},
+        {"name": "run_status", "type": "string", "description": COLUMN_DESCRIPTIONS["run_status"]},
+        {"name": "severity", "type": "string", "description": COLUMN_DESCRIPTIONS["severity"]},
+        {"name": "affected_table", "type": "string", "description": COLUMN_DESCRIPTIONS["affected_table"]},
+        {"name": "issue_code", "type": "string", "description": COLUMN_DESCRIPTIONS["issue_code"]},
+        {"name": "issue_message", "type": "string", "description": COLUMN_DESCRIPTIONS["issue_message"]},
+        {"name": "resolution", "type": "string", "description": COLUMN_DESCRIPTIONS["resolution"]},
+    ]
+    quality_rows = _quality_issue_rows(manifest_payload)
+    _write_rows(
+        destination / "data_quality_issues.csv", quality_rows,
+        [field["name"] for field in quality_fields],
+    )
+    resources.append({
+        "path": "data_quality_issues.csv",
+        "description": TABLE_DESCRIPTIONS["data_quality_issues"],
+        "schema": {"fields": quality_fields},
+    })
+    dictionary_rows.extend({
+        "table": "data_quality_issues", "file": "data_quality_issues.csv",
+        "column": field["name"], "type": field["type"],
+        "nullable": field["name"] in {"race_name", "affected_table", "issue_message"},
+        "description": field["description"], "feature_time": "", "role": "",
+        "target": False, "unit": "", "allowed_values": "",
+    } for field in quality_fields)
     provenance_rows = _deduplicate_rows(provenance_rows, PROVENANCE_COLUMNS)
     _write_rows(destination / "provenance.csv", provenance_rows, PROVENANCE_COLUMNS)
     provenance_fields = _provenance_fields()
@@ -111,6 +140,46 @@ def _coverage_note(table: str) -> str:
         "stints": "Detailed tyre-stint timing from OpenF1 coverage beginning in 2023.",
         "weather_observations": "Minute-level trackside OpenF1 weather beginning in 2023.",
     }[table]
+
+
+def _quality_issue_rows(manifest: dict) -> list[dict[str, object]]:
+    """Flatten per-race audit decisions into a human-readable release table."""
+    rows: list[dict[str, object]] = []
+    for run in manifest.get("runs", []):
+        status = str(run.get("status", "unknown"))
+        issues = list(run.get("issues", []))
+        if not issues and status in {"failed", "unavailable", "quarantined", "warning"}:
+            issues = [{
+                "severity": "error" if status == "failed" else status,
+                "code": f"run_{status}",
+                "message": run.get("reason", "No detailed source coverage is available"),
+            }]
+        for issue in issues:
+            severity = str(issue.get("severity", "info"))
+            rows.append({
+                "season": run.get("season"),
+                "round_number": run.get("round_number"),
+                "race_name": run.get("race_name", ""),
+                "run_status": status,
+                "severity": severity,
+                "affected_table": issue.get("table", ""),
+                "issue_code": issue.get("code", "unspecified"),
+                "issue_message": issue.get("message", ""),
+                "resolution": _quality_resolution(status, severity),
+            })
+    return rows
+
+
+def _quality_resolution(status: str, severity: str) -> str:
+    if status == "failed":
+        return "publication_blocked"
+    if status == "quarantined" or severity == "error":
+        return "affected_table_excluded"
+    if status == "unavailable":
+        return "unavailable_not_fabricated"
+    if severity == "warning":
+        return "included_with_warning"
+    return "documented_normalization_or_coverage_boundary"
 
 
 def _read_existing_metadata(path: Path | None) -> dict:
