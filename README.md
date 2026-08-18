@@ -132,6 +132,22 @@ create versions with `kaggle datasets version`.
 
 Random row splits and synthetic validation will be replaced by chronological race and season holdouts.
 
+## Kaggle notebook series
+
+Four public-ready notebooks under `notebooks/kaggle/` turn the release into a
+guided learning and analysis experience:
+
+1. Dataset coverage, quality decisions, missingness, and safe joins.
+2. Pit-stop trends and descriptive race-start weather comparisons.
+3. Tyre compound, stint-length, and strategy-sequence exploration.
+4. Chronological leakage-safe baselines for finish position and pit-stop count.
+
+Regenerate them with `python scripts/build_kaggle_notebooks.py`. Each directory
+contains Kaggle `kernel-metadata.json`, attaches the canonical dataset, disables
+internet/GPU access, and publishes publicly. The manual **Publish Kaggle
+notebooks** GitHub Actions workflow pushes all four notebooks using the existing
+`KAGGLE_API_TOKEN` secret.
+
 ## Phase 4 feature engineering
 
 Build the leakage-safe pre-race finishing-position table from a consolidated

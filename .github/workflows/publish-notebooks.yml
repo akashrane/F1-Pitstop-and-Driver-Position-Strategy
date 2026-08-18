@@ -1,0 +1,35 @@
+name: Publish Kaggle notebooks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Kaggle CLI
+        run: python -m pip install --upgrade kaggle pytest
+      - name: Regenerate and validate notebook packages
+        run: |
+          python scripts/build_kaggle_notebooks.py
+          python -m pytest -q tests/test_kaggle_notebooks.py
+      - name: Publish four public notebooks
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          if [[ -z "$KAGGLE_API_TOKEN" ]]; then
+            echo "KAGGLE_API_TOKEN is not configured" >&2
+            exit 1
+          fi
+          for notebook_dir in notebooks/kaggle/*; do
+            echo "Publishing ${notebook_dir}"
+            kaggle kernels push --path "$notebook_dir" --timeout 1800
+          done
