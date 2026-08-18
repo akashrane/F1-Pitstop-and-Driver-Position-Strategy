@@ -78,8 +78,8 @@ python scripts/build_seasons.py --start-year 1950 --end-year 2026
 
 Raw responses and their provenance are cached per race. Use `--refresh` only
 when intentionally taking new source snapshots. Each run writes a manifest;
-warning and quarantined races remain available for investigation but are
-excluded from the model-ready consolidated tables.
+warning rows remain included, while an error excludes only the affected table
+for that race. Independently valid official results are preserved.
 
 ## Historical coverage
 
@@ -95,6 +95,8 @@ pretending that modern telemetry exists for early seasons:
   2023 onward.
 - `coverage.csv`: exact observed minimum/maximum season and row count for every
   published table.
+- `data_quality_issues.csv`: per-race source limitations, normalization
+  decisions, warnings, quarantines, and the publication action taken.
 
 Pre-2023 results use two paginated season-level Jolpica snapshots, while pit
 events from 2011–2022 use the supported per-race endpoint. Early races may
@@ -108,7 +110,8 @@ the usual race weekend, and can also be started manually. It tests the code,
 builds completed races, rejects failed or empty releases, uploads the verified
 files as a GitHub Actions artifact, and publishes a Kaggle version on scheduled
 runs. Warning and quarantined races are visible in the manifest but are not
-included in the published CSV files.
+silently accepted: warning rows are documented, and an error excludes its
+affected race table while preserving independently valid tables.
 
 Configure these GitHub repository settings before enabling publication:
 
@@ -204,9 +207,13 @@ rejected unless every training season precedes every test season.
 
 Historical OpenF1 stints sometimes assign the same boundary lap to two
 adjacent stints. The normalizer preserves that lap as the last completed lap of
-the earlier stint and moves the later stint start forward by one. Each repair
-is retained as an informational validation record; multi-lap overlaps remain
-errors and quarantine the race.
+the earlier stint and moves the later stint start forward by one. A source tyre
+record covering no exclusive completed lap is omitted rather than assigned an
+invented lap. Each decision is retained as an informational validation record;
+multi-lap overlaps remain errors and quarantine the stint table. When a driver
+is disqualified, their official zero-lap classification is preserved, but it is
+not used as a pit-stop range limit because disqualification can erase laps that
+were actually driven.
 
 ## Phase 6 race context
 

@@ -8,6 +8,7 @@ TABLE_DESCRIPTIONS = {
     "weather_observations": "Timestamped trackside weather observations recorded during race sessions.",
     "provenance": "Compact source and retrieval metadata removed from the analysis-ready CSV files.",
     "coverage": "Per-table season coverage and row counts; unavailable historical telemetry is not represented as zero.",
+    "data_quality_issues": "Per-race validation findings, source limitations, normalization decisions, and publication treatment.",
 }
 
 PUBLIC_EXCLUDED_COLUMNS = {"source", "source_url", "retrieved_at_utc", "validation_status"}
@@ -75,6 +76,13 @@ COLUMN_DESCRIPTIONS = {
     "latest_season": "Latest season containing an observed row in the table.",
     "row_count": "Number of published rows in the table.",
     "availability_note": "Known source-coverage boundary and interpretation guidance.",
+    "race_name": "Official or source-provided race name.",
+    "run_status": "Overall validation status assigned to the race build.",
+    "severity": "Severity assigned to the individual data-quality finding.",
+    "affected_table": "Canonical table affected by the finding, when table-specific.",
+    "issue_code": "Stable machine-readable identifier for the data-quality finding.",
+    "issue_message": "Human-readable explanation of the finding or source limitation.",
+    "resolution": "Publication action taken for the finding, such as documentation, warning, exclusion, or blocking.",
 }
 
 DATASET_TITLE = "Formula 1 Pit Stop Dataset"

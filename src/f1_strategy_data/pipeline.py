@@ -10,6 +10,7 @@ from typing import Any, Iterable
 from urllib.error import HTTPError
 
 from .normalize import (
+    completed_laps_for_pit_validation,
     count_shared_stint_boundaries,
     driver_number_map,
     jolpica_race,
@@ -54,7 +55,7 @@ def build_historical_season(
         race_drivers, _ = normalize_race_drivers(
             race, [], None, **results_provenance
         )
-        completed_laps = {row["driver_id"]: row["laps_completed"] for row in race_drivers}
+        completed_laps = completed_laps_for_pit_validation(race_drivers)
         if season >= 2011:
             race_raw_dir = raw_dir / f"round-{round_number:02d}"
             race_raw_dir.mkdir(parents=True, exist_ok=True)
@@ -164,7 +165,7 @@ def build_reference_race(
     race_drivers, result_mismatches = normalize_race_drivers(
         race, payloads["openf1_results"], session_key, **provenance["jolpica_results"]
     )
-    completed_laps = {row["driver_id"]: row["laps_completed"] for row in race_drivers}
+    completed_laps = completed_laps_for_pit_validation(race_drivers)
     valid_stint_payloads = [
         row for row in payloads["openf1_stints"]
         if row.get("lap_start") is not None and row.get("lap_end") is not None
@@ -176,10 +177,14 @@ def build_reference_race(
         ) if payloads["openf1_session"] else
         normalize_historical_race_context(race, **provenance["jolpica_results"])
     )
+    normalized_stints = normalize_stints(
+        valid_stint_payloads, identifiers, season, round_number,
+        **provenance["openf1_stints"],
+    )
     tables = {
         "race_context": race_context,
         "race_drivers": race_drivers,
-        "stints": normalize_stints(valid_stint_payloads, identifiers, season, round_number, **provenance["openf1_stints"]),
+        "stints": normalized_stints,
         "pit_events": normalize_jolpica_pit_events(
             payloads["jolpica_pits"], payloads["openf1_pits"], identifiers, completed_laps,
             season, round_number, session_key, **provenance["jolpica_pits"]
@@ -198,6 +203,18 @@ def build_reference_race(
             "severity": "info", "code": "incomplete_stint_boundary", "table": "stints",
             "count": omitted_stints, "message": "Omitted source stint rows without both lap boundaries",
         })
+    identified_stints = [
+        row for row in valid_stint_payloads
+        if row.get("driver_number") is not None
+        and int(row["driver_number"]) in identifiers
+    ]
+    omitted_zero_lap_stints = len(identified_stints) - len(normalized_stints)
+    if omitted_zero_lap_stints:
+        issue_records.append({
+            "severity": "info", "code": "zero_lap_stint_omitted", "table": "stints",
+            "count": omitted_zero_lap_stints,
+            "message": "Omitted source tyre records that covered no exclusive completed racing lap",
+        })
     adjusted_boundaries = count_shared_stint_boundaries(valid_stint_payloads, identifiers)
     if adjusted_boundaries:
         issue_records.append({
@@ -205,7 +222,7 @@ def build_reference_race(
             "code": "normalized_shared_stint_boundary",
             "table": "stints",
             "count": adjusted_boundaries,
-            "message": "Moved later stint starts one lap forward where OpenF1 assigned a boundary lap to both stints",
+            "message": "Resolved shared boundary laps by moving later stint starts or omitting zero-lap tyre records",
         })
     for table, rows in tables.items():
         issue_records.extend(issue.__dict__ | {"table": table} for issue in duplicate_key_issues(rows, TABLE_KEYS[table]))

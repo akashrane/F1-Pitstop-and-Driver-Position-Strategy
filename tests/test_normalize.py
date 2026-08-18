@@ -1,4 +1,5 @@
 from f1_strategy_data.normalize import (
+    completed_laps_for_pit_validation,
     count_shared_stint_boundaries,
     driver_number_map,
     normalize_pit_events,
@@ -72,6 +73,38 @@ def test_shared_stint_boundary_is_assigned_to_previous_stint_only():
 
     assert [(row["lap_start"], row["lap_end"]) for row in rows] == [(1, 20), (21, 40)]
     assert count_shared_stint_boundaries(source_rows, {4: "norris"}) == 1
+
+
+def test_zero_lap_source_stints_are_omitted_without_inventing_laps():
+    source_rows = [
+        {"session_key": 1, "driver_number": 4, "stint_number": 1, "compound": "SOFT", "lap_start": 1, "lap_end": 0, "tyre_age_at_start": 0},
+        {"session_key": 1, "driver_number": 4, "stint_number": 2, "compound": "HARD", "lap_start": 1, "lap_end": 20, "tyre_age_at_start": 0},
+    ]
+
+    rows = normalize_stints(source_rows, {4: "norris"}, 2026, 1, **PROVENANCE)
+
+    assert [(row["stint_number"], row["lap_start"], row["lap_end"]) for row in rows] == [(2, 1, 20)]
+
+
+def test_shared_single_lap_stint_is_omitted_when_no_exclusive_lap_remains():
+    source_rows = [
+        {"session_key": 1, "driver_number": 4, "stint_number": 1, "compound": "INTERMEDIATE", "lap_start": 1, "lap_end": 2, "tyre_age_at_start": 0},
+        {"session_key": 1, "driver_number": 4, "stint_number": 2, "compound": "INTERMEDIATE", "lap_start": 2, "lap_end": 2, "tyre_age_at_start": 0},
+        {"session_key": 1, "driver_number": 4, "stint_number": 3, "compound": "MEDIUM", "lap_start": 3, "lap_end": 20, "tyre_age_at_start": 0},
+    ]
+
+    rows = normalize_stints(source_rows, {4: "norris"}, 2026, 1, **PROVENANCE)
+
+    assert [row["stint_number"] for row in rows] == [1, 3]
+
+
+def test_disqualified_driver_laps_are_unknown_for_pit_validation():
+    rows = [
+        {"driver_id": "driver-a", "laps_completed": 0, "status": "Disqualified"},
+        {"driver_id": "driver-b", "laps_completed": 12, "status": "Retired"},
+    ]
+
+    assert completed_laps_for_pit_validation(rows) == {"driver-a": None, "driver-b": 12}
 
 
 def test_jolpica_pit_event_is_kept_when_openf1_event_is_missing():

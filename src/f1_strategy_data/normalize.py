@@ -80,7 +80,7 @@ def normalize_stints(
     source_url: str,
     retrieved_at_utc: str,
 ) -> list[dict[str, Any]]:
-    rows = [{
+    source = [{
         "season": season,
         "round_number": round_number,
         "session_key": int(row["session_key"]),
@@ -97,17 +97,53 @@ def normalize_stints(
     } for row in source_rows
       if row.get("driver_number") is not None and int(row["driver_number"]) in identifiers]
     by_driver: dict[tuple[int, str], list[dict[str, Any]]] = {}
-    for row in rows:
+    for row in source:
         by_driver.setdefault((row["session_key"], row["driver_id"]), []).append(row)
+    rows: list[dict[str, Any]] = []
     for driver_rows in by_driver.values():
         ordered = sorted(driver_rows, key=lambda row: (row["stint_number"], row["lap_start"]))
-        for previous, current in zip(ordered, ordered[1:]):
-            # Some OpenF1 historical records assign the pit lap to both stints.
-            # Keep it as the completed lap of the old stint and begin the new
-            # stint on the following lap. Larger overlaps remain validation errors.
-            if current["lap_start"] == previous["lap_end"]:
-                current["lap_start"] += 1
+        previous_end: int | None = None
+        for current in ordered:
+            start = current["lap_start"]
+            end = current["lap_end"]
+            has_replacement = any(
+                other is not current
+                and other["lap_start"] == start
+                and other["lap_end"] >= start
+                for other in ordered
+            )
+            # OpenF1 sometimes emits a tyre record that covered no completed
+            # racing lap (for example 1-0 before the actual starting stint).
+            # It cannot be represented by our inclusive completed-lap schema.
+            if end == start - 1 and has_replacement:
+                continue
+            if previous_end is not None and start == previous_end:
+                start += 1
+                if start > end:
+                    continue
+                current["lap_start"] = start
+            rows.append(current)
+            previous_end = max(previous_end or end, end)
     return rows
+
+
+def completed_laps_for_pit_validation(
+    race_driver_rows: Iterable[dict[str, Any]],
+) -> dict[str, int | None]:
+    """Return meaningful lap totals for validating pit-event ranges.
+
+    A disqualification can reset the official classified lap total to zero
+    even though the driver raced and made recorded stops. The official zero is
+    retained in race_drivers, while the derived validation value is unknown.
+    """
+    return {
+        row["driver_id"]: (
+            None
+            if str(row.get("status", "")).strip().casefold() == "disqualified"
+            else row.get("laps_completed")
+        )
+        for row in race_driver_rows
+    }
 
 
 def count_shared_stint_boundaries(
