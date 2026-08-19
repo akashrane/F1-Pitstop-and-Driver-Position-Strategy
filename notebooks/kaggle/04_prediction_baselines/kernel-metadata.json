@@ -1,0 +1,16 @@
+{
+  "id": "akashrane2609/f1-leakage-safe-prediction-baselines",
+  "title": "F1 Leakage-Safe Prediction Baselines",
+  "code_file": "f1-leakage-safe-prediction-baselines.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": false,
+  "enable_gpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "akashrane2609/formula-1-pit-stop-dataset"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

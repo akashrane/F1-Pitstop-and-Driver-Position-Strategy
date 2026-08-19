@@ -8,6 +8,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pandas>=2.0", "scikit-learn>=1.4"]
 modeling = ["pandas>=2.0", "scikit-learn>=1.4"]
+notebooks = ["jupyter>=1.0", "matplotlib>=3.8", "nbclient>=0.10", "nbformat>=5.10", "pandas>=2.0", "scikit-learn>=1.4", "seaborn>=0.13"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
