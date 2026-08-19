@@ -41,9 +41,29 @@ SETUP = code(
     sns.set_theme(style="whitegrid", context="notebook")
     pd.set_option("display.max_columns", 100)
 
-    DATA_DIR = Path(os.getenv("F1_DATA_DIR", "/kaggle/input/formula-1-pit-stop-dataset"))
-    if not DATA_DIR.exists():
-        raise FileNotFoundError(f"Dataset directory not found: {DATA_DIR}")
+    REQUIRED_FILES = {"race_context.csv", "race_drivers.csv", "pit_events.csv"}
+    configured_dir = os.getenv("F1_DATA_DIR")
+    candidates = [
+        Path(configured_dir) if configured_dir else None,
+        Path("/kaggle/input/formula-1-pit-stop-dataset"),
+        Path.cwd() / "release" / "kaggle",
+        Path.cwd() / "data",
+    ]
+    kaggle_input = Path("/kaggle/input")
+    if kaggle_input.exists():
+        candidates.extend(path for path in kaggle_input.iterdir() if path.is_dir())
+
+    DATA_DIR = next(
+        (path for path in candidates if path and REQUIRED_FILES.issubset(p.name for p in path.glob("*.csv"))),
+        None,
+    )
+    if DATA_DIR is None:
+        checked = "\n - ".join(str(path) for path in candidates if path)
+        raise FileNotFoundError(
+            "Could not find the F1 dataset CSV files. Attach the Kaggle dataset "
+            "'akashrane2609/formula-1-pit-stop-dataset' or set F1_DATA_DIR to the "
+            f"directory containing the CSV files.\nChecked:\n - {checked}"
+        )
     print(f"Reading data from {DATA_DIR}")
     """
 )
