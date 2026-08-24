@@ -69,6 +69,27 @@ python scripts/audit_legacy_data.py `
 
 The source clients currently expose Jolpica results/pit stops and OpenF1 session endpoints while retaining source URL and retrieval time.
 
+## Enterprise Data Intelligence Agent
+
+The repository includes a read-only OpenAI agent that answers questions from a
+bounded profile of approved CSV datasets. It cites repository-relative evidence,
+does not execute model-generated code, and sends only column metadata, null
+counts, and up to five sample rows per dataset to the API.
+By default it reads the leakage-safe feature tables and the consolidated
+2023–2026 release rather than thousands of per-race intermediate files.
+
+```powershell
+pip install -e ".[agent]"
+$env:OPENAI_API_KEY = "your-api-key"
+$env:PYTHONPATH = "src"
+python scripts/ask_data_agent.py "Which datasets can support pit strategy analysis?"
+```
+
+Use `--catalog` to inspect exactly what can be supplied without making an API
+request. Set `OPENAI_MODEL` or pass `--model` to override the default
+`gpt-5.6-terra`. Additional directories must be explicitly approved with a
+repository-relative `--data-root` argument.
+
 Build every completed race in a season range and create verified-only consolidated tables:
 
 ```powershell
