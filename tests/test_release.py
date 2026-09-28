@@ -2,6 +2,8 @@ import json
 import csv
 from pathlib import Path
 
+import pytest
+
 from f1_strategy_data.batch import TABLES
 from scripts.prepare_kaggle_release import prepare_release
 from scripts.validate_release import validate_manifest
@@ -27,7 +29,8 @@ def test_release_gate_requires_race_context(tmp_path: Path):
     assert validate_manifest(path) == ["consolidated table race_context is empty"]
 
 
-def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
+@pytest.mark.parametrize("existing_keywords", [[], ["formula 1", "sports"]])
+def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path, existing_keywords: list[str]):
     processed = tmp_path / "data" / "processed"
     source = processed / "consolidated_2023_2026"
     source.mkdir(parents=True)
@@ -58,6 +61,7 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     existing_metadata = tmp_path / "current-metadata.json"
     existing_metadata.write_text(json.dumps({
         "title": "Existing Dataset Title",
+        "keywords": existing_keywords,
         "license": {
             "name": "Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)",
             "url": "https://creativecommons.org/licenses/by-nc/4.0/",
@@ -76,7 +80,9 @@ def test_prepare_release_copies_tables_manifest_and_metadata(tmp_path: Path):
     assert metadata["title"] == "Existing Dataset Title"
     assert "licenses" not in metadata
     assert metadata["expectedUpdateFrequency"] == "weekly"
-    assert "keywords" not in metadata
+    assert metadata["keywords"] == list(dict.fromkeys([
+        *existing_keywords, "tabular", "automobiles and vehicles", "sports",
+    ]))
     assert [resource["path"] for resource in metadata["resources"]] == [
         "pit_events.csv", "race_context.csv", "race_drivers.csv", "stints.csv", "weather_observations.csv", "coverage.csv", "data_quality_issues.csv", "provenance.csv"
     ]
