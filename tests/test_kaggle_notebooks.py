@@ -6,6 +6,11 @@ ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK_ROOT = ROOT / "notebooks" / "kaggle"
 
 
+def cell_source(cell):
+    source = cell["source"]
+    return "".join(source) if isinstance(source, list) else source
+
+
 def test_four_public_kaggle_notebooks_have_valid_metadata():
     folders = sorted(path for path in NOTEBOOK_ROOT.iterdir() if path.is_dir())
     assert len(folders) == 4
@@ -24,7 +29,13 @@ def test_four_public_kaggle_notebooks_have_valid_metadata():
         assert len(notebook["cells"]) >= 8
         for index, cell in enumerate(notebook["cells"]):
             if cell["cell_type"] == "code":
-                compile(cell["source"], f"{folder.name}:cell-{index}", "exec")
-        sources = "\n".join(cell["source"] for cell in notebook["cells"])
-        assert "/kaggle/input/formula-1-pit-stop-dataset" in sources
+                source = cell_source(cell)
+                # Colab stores source as lines and may start setup with a %pip magic.
+                python_source = "\n".join(
+                    line for line in source.splitlines()
+                    if not line.lstrip().startswith("%pip ")
+                )
+                compile(python_source, f"{folder.name}:cell-{index}", "exec")
+        sources = "\n".join(cell_source(cell) for cell in notebook["cells"])
+        assert "akashrane2609/formula-1-pit-stop-dataset" in sources
         assert "classified_position" not in sources.split("numeric =", 1)[-1].split("prep =", 1)[0] if "numeric =" in sources else True
