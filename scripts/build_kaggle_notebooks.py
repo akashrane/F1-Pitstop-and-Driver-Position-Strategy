@@ -58,11 +58,11 @@ SETUP = code(
         None,
     )
     if DATA_DIR is None:
-        checked = "\n - ".join(str(path) for path in candidates if path)
+        checked = "\\n - ".join(str(path) for path in candidates if path)
         raise FileNotFoundError(
             "Could not find the F1 dataset CSV files. Attach the Kaggle dataset "
             "'akashrane2609/formula-1-pit-stop-dataset' or set F1_DATA_DIR to the "
-            f"directory containing the CSV files.\nChecked:\n - {checked}"
+            f"directory containing the CSV files.\\nChecked:\\n - {checked}"
         )
     print(f"Reading data from {DATA_DIR}")
     """
@@ -119,7 +119,8 @@ NOTEBOOKS = {
                     on=["season", "round_number"], how="left", indicator=True
                 )["_merge"].eq("both").all(),
             }
-            pd.Series(checks, name="passed").to_frame()
+            display(pd.Series(checks, name="passed").to_frame())
+            print(f"{sum(checks.values())} of {len(checks)} key and join checks passed")
             """),
             md("## Missingness is meaningful\n\nThe chart below highlights columns whose availability is tied to a source era. Read `coverage.csv` and the dictionary before imputing values."),
             code("""
@@ -161,12 +162,16 @@ NOTEBOOKS = {
             entrants = drivers.groupby(race_keys).size().rename("entrants")
             race_pits = pits.groupby(race_keys).size().rename("pit_stops")
             by_race = context.merge(entrants, on=race_keys, how="left").merge(race_pits, on=race_keys, how="left")
-            by_race["pit_stops"] = by_race["pit_stops"].fillna(0)
-            by_race["stops_per_driver"] = by_race["pit_stops"] / by_race["entrants"]
+            # Only count zero-stop drivers within races that have pit-event coverage.
+            # A race with no pit records may reflect missing source data, not zero stops.
             by_race = by_race[by_race["season"] >= 2011].copy()
+            missing_pit_races = by_race["pit_stops"].isna()
+            print(f"Excluding {missing_pit_races.sum()} races with no recorded pit events")
+            by_race = by_race[~missing_pit_races & by_race["entrants"].gt(0)].copy()
+            by_race["stops_per_driver"] = by_race["pit_stops"] / by_race["entrants"]
             by_race.head()
             """),
-            md("## How pit-stop frequency changed"),
+            md("## How pit-stop frequency changed\n\nRaces without pit-event records are excluded because an empty source response cannot establish a genuine zero-stop race. Counts describe recorded pit events only."),
             code("""
             annual = by_race.groupby("season").agg(
                 races=("round_number", "size"), mean_stops_per_driver=("stops_per_driver", "mean")
@@ -176,7 +181,8 @@ NOTEBOOKS = {
             plt.title("Average recorded stops per driver and race")
             plt.ylabel("Stops per driver")
             plt.tight_layout()
-            annual.tail(10)
+            display(annual.tail(10))
+            print("The last season may be incomplete; compare its race count before reading the trend.")
             """),
             md("## Typical pit laps and durations\n\n`pit_duration_s` is source-defined pit-lane duration and is not interchangeable with stationary `stop_duration_s`."),
             code("""
@@ -193,7 +199,11 @@ NOTEBOOKS = {
             code("""
             modern = by_race[by_race["start_rainfall"].notna()].copy()
             modern["start_condition"] = np.where(modern["start_rainfall"].astype(float).gt(0), "Rain at start", "Dry at start")
-            display(modern.groupby("start_condition")["stops_per_driver"].agg(["count", "mean", "median"]))
+            weather_summary = modern.groupby("start_condition")["stops_per_driver"].agg(
+                races="count", mean="mean", median="median"
+            )
+            display(weather_summary)
+            print("Race-start rain is descriptive; it does not account for rain later in a race.")
             plt.figure(figsize=(7, 4))
             sns.boxplot(data=modern, x="start_condition", y="stops_per_driver", palette=["#3671c6", "#e10600"])
             plt.title("Stops per driver by race-start rainfall")
@@ -219,6 +229,7 @@ NOTEBOOKS = {
             SETUP,
             code("""
             stints = pd.read_csv(DATA_DIR / "stints.csv")
+            pits = pd.read_csv(DATA_DIR / "pit_events.csv")
             context = pd.read_csv(DATA_DIR / "race_context.csv")
             stints["stint_length_laps"] = stints["lap_end"] - stints["lap_start"] + 1
             valid = stints[stints["stint_length_laps"].gt(0)].copy()
@@ -248,12 +259,26 @@ NOTEBOOKS = {
             plt.tight_layout()
             common.groupby("compound")["stint_length_laps"].agg(["count", "median", "mean"]).round(1)
             """),
-            md("## Strategy sequences\n\nA sequence summarizes the ordered compounds for one driver-race. It is useful for exploration but does not encode safety-car timing, traffic, or tyre condition."),
+            md("## Strategy sequences\n\nA sequence summarizes recorded compounds for one driver-race. Stint transitions are checked against pit events where those records exist; discrepancies need review and are not treated as measured stops. The sequence does not encode safety-car timing, traffic, or tyre condition."),
             code("""
             strategy = (valid.sort_values(["season", "round_number", "driver_id", "stint_number"])
                 .groupby(["season", "round_number", "driver_id"])["compound"]
                 .agg(" → ".join).rename("strategy").reset_index())
-            strategy["stops_implied"] = strategy["strategy"].str.count("→")
+            strategy["stint_transitions"] = strategy["strategy"].str.count("→")
+            pit_counts = pits.groupby(["season", "round_number", "driver_id"]).size().rename("recorded_stops")
+            strategy = strategy.merge(pit_counts, on=["season", "round_number", "driver_id"], how="left")
+            covered_races = pits[["season", "round_number"]].drop_duplicates().assign(pit_coverage=True)
+            strategy = strategy.merge(covered_races, on=["season", "round_number"], how="left")
+            strategy.loc[strategy["pit_coverage"].eq(True), "recorded_stops"] = (
+                strategy.loc[strategy["pit_coverage"].eq(True), "recorded_stops"].fillna(0)
+            )
+            display(pd.DataFrame({
+                "driver_races_with_pit_coverage": [strategy["pit_coverage"].eq(True).sum()],
+                "stint_stop_disagreements": [(
+                    strategy["pit_coverage"].eq(True)
+                    & strategy["stint_transitions"].ne(strategy["recorded_stops"])
+                ).sum()],
+            }))
             display(strategy["strategy"].value_counts().head(15).to_frame("driver_races"))
             plt.figure(figsize=(9, 5))
             top = strategy["strategy"].value_counts().head(10).sort_values()
@@ -266,7 +291,7 @@ NOTEBOOKS = {
             code("""
             race_names = context[["season", "round_number", "circuit_short_name", "country_name"]]
             strategy.merge(race_names, on=["season", "round_number"], how="left").sort_values(
-                ["season", "round_number", "stops_implied"], ascending=[False, False, False]
+                ["season", "round_number", "stint_transitions"], ascending=[False, False, False]
             ).head(25)
             """),
         ],
@@ -297,9 +322,12 @@ NOTEBOOKS = {
 
             frame = drivers.merge(context[["season", "round_number", "circuit_id"]], on=["season", "round_number"], how="left")
             stop_counts = pits.groupby(keys).size().rename("pit_stop_count").reset_index()
+            covered_races = pits[["season", "round_number"]].drop_duplicates().assign(pit_coverage=True)
             frame = frame.merge(stop_counts, on=keys, how="left")
-            # Zero is valid only inside the recorded-pit era (2011 onward).
-            frame.loc[frame["season"].ge(2011), "pit_stop_count"] = frame.loc[frame["season"].ge(2011), "pit_stop_count"].fillna(0)
+            frame = frame.merge(covered_races, on=["season", "round_number"], how="left")
+            # Zero is supported for a driver only when other pit events establish race coverage.
+            covered = frame["season"].ge(2011) & frame["pit_coverage"].eq(True)
+            frame.loc[covered, "pit_stop_count"] = frame.loc[covered, "pit_stop_count"].fillna(0)
             frame = frame.sort_values(["season", "round_number", "driver_id"]).reset_index(drop=True)
 
             # Collapse to one entity/race value before shifting. This prevents another
@@ -318,7 +346,7 @@ NOTEBOOKS = {
             frame = add_prior_mean(frame, "driver_id", "pit_stop_count", "driver_prior_mean_stops")
             frame.tail()
             """),
-            md("## Chronological evaluation helper"),
+            md("## Chronological evaluation helper\n\nUse three rolling season holdouts, with all training data before each holdout. The newest season is excluded because it may be incomplete. Mean Spearman correlation compares ordering within each race; higher is better."),
             code("""
             categorical = ["driver_id", "constructor_id", "circuit_id"]
             numeric = ["grid_position", "driver_prior_mean_finish", "constructor_prior_mean_finish", "driver_prior_mean_stops"]
@@ -332,45 +360,72 @@ NOTEBOOKS = {
 
             def evaluate(data, target):
                 data = data.dropna(subset=[target]).copy()
-                test_season = int(data["season"].max())
-                train, test = data[data["season"] < test_season], data[data["season"] == test_season]
-                assert train["season"].max() < test["season"].min()
-                X_train, X_test = train[numeric + categorical], test[numeric + categorical]
-                y_train, y_test = train[target], test[target]
-                models = {
-                    "median_dummy": Pipeline([("prep", prep), ("model", DummyRegressor(strategy="median"))]),
-                    "random_forest": Pipeline([("prep", prep), ("model", RandomForestRegressor(
-                        n_estimators=40, max_depth=12, min_samples_leaf=4, random_state=42, n_jobs=1
-                    ))]),
-                }
+                seasons = sorted(data["season"].unique())
+                # Conservatively exclude the latest season because it may still be underway.
+                test_seasons = seasons[-4:-1]
+                assert len(test_seasons) == 3, "At least four seasons are needed"
                 rows = []
-                for name, model in models.items():
-                    model.fit(X_train, y_train)
-                    pred = model.predict(X_test)
-                    rows.append({"target": target, "model": name, "test_season": test_season,
-                                 "train_rows": len(train), "test_rows": len(test),
-                                 "MAE": mean_absolute_error(y_test, pred),
-                                 "RMSE": mean_squared_error(y_test, pred) ** .5})
-                return pd.DataFrame(rows), test_season
+                for test_season in test_seasons:
+                    train = data[data["season"] < test_season]
+                    test = data[data["season"] == test_season]
+                    assert train["season"].max() < test["season"].min()
+                    X_train, X_test = train[numeric + categorical], test[numeric + categorical]
+                    y_train, y_test = train[target], test[target]
+                    models = {
+                        "median_dummy": Pipeline([("prep", prep), ("model", DummyRegressor(strategy="median"))]),
+                        "random_forest": Pipeline([("prep", prep), ("model", RandomForestRegressor(
+                            n_estimators=40, max_depth=12, min_samples_leaf=4, random_state=42, n_jobs=1
+                        ))]),
+                    }
+                    predictions = {}
+                    if target == "classified_position":
+                        # A driver starting position is a meaningful pre-race finish benchmark.
+                        predictions["grid_position"] = test["grid_position"].to_numpy()
+                    for name, model in models.items():
+                        model.fit(X_train, y_train)
+                        predictions[name] = model.predict(X_test)
+                    for name, pred in predictions.items():
+                        rank_frame = test[["season", "round_number"]].copy()
+                        rank_frame["actual"] = y_test.to_numpy()
+                        rank_frame["predicted"] = pred
+                        correlations = [
+                            group["actual"].corr(group["predicted"], method="spearman")
+                            for _, group in rank_frame.groupby(["season", "round_number"])
+                            if group["actual"].nunique() > 1 and group["predicted"].nunique() > 1
+                        ]
+                        rows.append({
+                            "target": target, "model": name, "test_season": test_season,
+                            "train_rows": len(train), "test_rows": len(test),
+                            "MAE": mean_absolute_error(y_test, pred),
+                            "RMSE": mean_squared_error(y_test, pred) ** .5,
+                            "mean_race_spearman": np.mean(correlations) if correlations else np.nan,
+                        })
+                return pd.DataFrame(rows), test_seasons
             """),
             md("## Finishing-position baseline\n\n`classified_position` is the target and never a feature. Grid position and prior-history aggregates are available before the race."),
             code("""
             finish_data = frame[frame["classified_position"].notna() & frame["grid_position"].notna()]
-            finish_scores, finish_test_season = evaluate(finish_data, "classified_position")
+            finish_scores, finish_test_seasons = evaluate(finish_data, "classified_position")
             finish_scores.round(3)
             """),
-            md("## Pit-stop-count baseline\n\nThis task starts in 2011, when recorded pit-event coverage begins. An absent pit row is treated as zero only within that supported era."),
+            md("## Pit-stop-count baseline\n\nThis task starts in 2011. An absent driver pit row counts as zero only if the race has recorded pit events; races with no pit-event records are excluded."),
             code("""
             pit_data = frame[frame["season"].ge(2011) & frame["pit_stop_count"].notna()]
-            pit_scores, pit_test_season = evaluate(pit_data, "pit_stop_count")
+            pit_scores, pit_test_seasons = evaluate(pit_data, "pit_stop_count")
             scores = pd.concat([finish_scores, pit_scores], ignore_index=True)
             display(scores.round(3))
-            sns.barplot(data=scores, x="target", y="MAE", hue="model")
-            plt.title("Chronological holdout MAE (lower is better)")
+            summary = scores.groupby(["target", "model"], as_index=False).agg(
+                mean_MAE=("MAE", "mean"), mean_RMSE=("RMSE", "mean"),
+                mean_race_spearman=("mean_race_spearman", "mean"),
+            )
+            display(summary.round(3))
+            sns.barplot(data=summary, x="target", y="mean_MAE", hue="model", errorbar=None)
+            plt.title("Mean absolute error across three rolling season holdouts")
+            plt.ylabel("Mean MAE (lower is better)")
             plt.xlabel("")
             plt.tight_layout()
             """),
-            md("## Responsible interpretation\n\n- The latest season may be incomplete, so metrics will change after each race.\n- Historical averages are shifted, but a stronger production pipeline should compute features race-by-race to handle duplicate historical entries explicitly.\n- Race-start weather is excluded here to keep this a strict pre-event baseline.\n- Use ranking metrics and uncertainty estimates before deploying finish predictions.\n- Never replace the chronological holdout with a random row split."),
+            md("## Responsible interpretation\n\n- The latest season is excluded from scoring because it may be incomplete.\n- Historical averages are shifted, but a stronger production pipeline should compute features race-by-race to handle duplicate historical entries explicitly.\n- Race-start weather is excluded here to keep this a strict pre-event baseline.\n- Compare finish predictions with the grid baseline and within-race ranking, not MAE alone.\n- Inspect uncertainty and race coverage before deployment; never replace the chronological holdout with a random row split."),
         ],
     },
 }
