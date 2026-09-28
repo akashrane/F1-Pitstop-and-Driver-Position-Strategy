@@ -22,6 +22,9 @@ def test_four_public_kaggle_notebooks_have_valid_metadata():
         assert metadata["dataset_sources"] == ["akashrane2609/formula-1-pit-stop-dataset"]
         assert notebook["nbformat"] == 4
         assert len(notebook["cells"]) >= 8
+        for index, cell in enumerate(notebook["cells"]):
+            if cell["cell_type"] == "code":
+                compile(cell["source"], f"{folder.name}:cell-{index}", "exec")
         sources = "\n".join(cell["source"] for cell in notebook["cells"])
         assert "/kaggle/input/formula-1-pit-stop-dataset" in sources
         assert "classified_position" not in sources.split("numeric =", 1)[-1].split("prep =", 1)[0] if "numeric =" in sources else True
