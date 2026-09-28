@@ -69,78 +69,232 @@ SETUP = code(
 )
 
 
+GUIDE_SETUP = code(
+    """
+    import os
+    from pathlib import Path
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    pd.set_option('display.max_columns', 100)
+    REQUIRED_FILES = {'race_context.csv', 'race_drivers.csv', 'pit_events.csv',
+                      'stints.csv', 'weather_observations.csv', 'coverage.csv',
+                      'data_quality_issues.csv', 'data_dictionary.csv'}
+    configured = os.getenv('F1_DATA_DIR')
+    candidates = [Path(configured)] if configured else []
+    candidates += [Path('/kaggle/input/formula-1-pit-stop-dataset'),
+                   Path.cwd() / 'release' / 'kaggle', Path.cwd() / 'data']
+    kaggle_input = Path('/kaggle/input')
+    if kaggle_input.exists():
+        candidates += [p for p in kaggle_input.iterdir() if p.is_dir()]
+    DATA_DIR = next((p for p in candidates if p.is_dir() and
+                     REQUIRED_FILES.issubset({f.name for f in p.glob('*.csv')})), None)
+    if DATA_DIR is None:
+        try:
+            import kagglehub
+        except ImportError as exc:
+            raise ImportError('Attach the dataset in Kaggle, or in Colab run %pip install kagglehub and rerun this cell.') from exc
+        DATA_DIR = Path(kagglehub.dataset_download('akashrane2609/formula-1-pit-stop-dataset'))
+    missing_files = REQUIRED_FILES - {p.name for p in DATA_DIR.glob('*.csv')}
+    if missing_files:
+        raise FileNotFoundError(f'Missing required files in {DATA_DIR}: {sorted(missing_files)}')
+    print(f'Dataset directory: {DATA_DIR}')
+    """
+)
+
+
 NOTEBOOKS = {
     "01_dataset_guide": {
         "slug": "f1-dataset-guide-coverage-quality-and-joins",
         "title": "F1 Dataset Guide: Coverage, Quality and Joins",
         "cells": [
+            md('''<a href="https://www.kaggle.com/code/akashrane2609/dataset-guide-coverage-quality-and-joins" target="_blank"><img alt="Open in Kaggle" src="https://kaggle.com/static/images/open-in-kaggle.svg"></a>'''),
             md("""
-            # F1 Dataset Guide: Coverage, Quality and Joins
+            # Formula 1 dataset: a field guide
 
-            A practical tour of the canonical Formula 1 tables: what each row means, which seasons are covered, how quality decisions are documented, and how to join the files safely.
+            **Start here before analyzing strategy.** This notebook shows what each row represents, where the historical record starts, which missing values mean “unavailable,” and how to join tables without multiplying rows. Run all cells to refresh the numbers for the release attached to this notebook.
 
-            **You will learn:** table grain, historical availability boundaries, key integrity, and modeling-time leakage boundaries. Missing telemetry before its source era means *unavailable*, not zero.
+            | If you want to… | Go to |
+            |:--|:--|
+            | Understand files and time coverage | Inventory and historical coverage |
+            | Build a race or driver view | Keys and two safe join recipes |
+            | Assess whether an observation can be used | Missingness, quality ledger, and provenance |
+            | Train a model | Feature timing and modeling checklist |
+
+            **Scope:** race results extend further back than pit stops and modern telemetry. A missing pit row in an uncovered race is not evidence of zero stops. The newest season can be partial.
             """),
-            SETUP,
+            GUIDE_SETUP,
+            md("""
+            ## 1. Inventory: what is in this release?
+
+            `race_context` is one row per race; `race_drivers` is one row per entrant; `pit_events` records visits to the pits; `stints` records tyre runs; `weather_observations` is a time series. The companion files describe coverage, fields, quality decisions, and source provenance. Counts below come from the attached files, so they change when the dataset is updated.
+            """),
             code("""
-            files = ["race_context", "race_drivers", "pit_events", "stints", "weather_observations"]
-            tables = {name: pd.read_csv(DATA_DIR / f"{name}.csv", low_memory=False) for name in files}
-            coverage = pd.read_csv(DATA_DIR / "coverage.csv")
-            issues = pd.read_csv(DATA_DIR / "data_quality_issues.csv", low_memory=False)
-            dictionary = pd.read_csv(DATA_DIR / "data_dictionary.csv")
-
-            inventory = pd.DataFrame({
-                "table": files,
-                "rows": [len(tables[n]) for n in files],
-                "columns": [tables[n].shape[1] for n in files],
-                "earliest_season": [tables[n]["season"].min() for n in files],
-                "latest_season": [tables[n]["season"].max() for n in files],
-            })
-            inventory
+            core = ['race_context', 'race_drivers', 'pit_events', 'stints', 'weather_observations']
+            tables = {name: pd.read_csv(DATA_DIR / f'{name}.csv', low_memory=False) for name in core}
+            coverage = pd.read_csv(DATA_DIR / 'coverage.csv')
+            issues = pd.read_csv(DATA_DIR / 'data_quality_issues.csv', low_memory=False)
+            dictionary = pd.read_csv(DATA_DIR / 'data_dictionary.csv', low_memory=False)
+            provenance_path = DATA_DIR / 'provenance.csv'
+            provenance = pd.read_csv(provenance_path, low_memory=False) if provenance_path.exists() else None
+            inventory = pd.DataFrame([
+                {'table': name, 'rows': len(frame), 'columns': frame.shape[1],
+                 'first_season': frame.season.min() if len(frame) else pd.NA,
+                 'last_season': frame.season.max() if len(frame) else pd.NA}
+                for name, frame in tables.items()
+            ])
+            display(inventory)
+            print('Companion files:', ', '.join(p.name for p in sorted(DATA_DIR.glob('*.csv')) if p.stem not in core))
             """),
-            md("## Historical coverage\n\nThe tables deliberately begin in different years because source availability differs. This prevents false zeroes in early seasons."),
+            md("""
+            ## 2. Grain and keys
+
+            A **grain** is what one row stands for. Join a many-row table to a one-row table only after checking that the one-row side has unique keys.
+
+            | File | One row represents | Join key / expected unique key |
+            |:--|:--|:--|
+            | `race_context` | A race | `season, round_number` |
+            | `race_drivers` | A driver entry in a race | `season, round_number, driver_id, car_number` |
+            | `pit_events` | A recorded pit visit | `season, round_number, driver_id, stop_number` |
+            | `stints` | A tyre stint | `season, round_number, driver_id, stint_number` |
+            | `weather_observations` | A weather sample | Use its session and timestamp fields; aggregate before joining to a race |
+
+            `driver_id` alone is not a race key. Keep `car_number` in the historical entry key. Never directly join raw pit visits and raw stints to driver entries together: the two one-to-many relationships multiply rows. Aggregate each table to driver-race first.
+            """),
+            code("""
+            keys = {
+                'race_context': ['season', 'round_number'],
+                'race_drivers': ['season', 'round_number', 'driver_id', 'car_number'],
+                'pit_events': ['season', 'round_number', 'driver_id', 'stop_number'],
+                'stints': ['season', 'round_number', 'driver_id', 'stint_number'],
+            }
+            key_report = pd.DataFrame([
+                {'table': name, 'rows': len(tables[name]),
+                 'null_key_rows': int(tables[name][cols].isna().any(axis=1).sum()),
+                 'duplicate_key_rows': int(tables[name].duplicated(cols, keep=False).sum())}
+                for name, cols in keys.items()
+            ])
+            display(key_report)
+            if key_report[['null_key_rows', 'duplicate_key_rows']].to_numpy().any():
+                print('Review key exceptions before joining; do not silently drop duplicates.')
+            """),
+            md("""
+            ## 3. Historical coverage
+
+            The dataset combines sources with different start years. `coverage.csv` is the release-specific reference; the chart uses its declared boundaries. The season at the right edge may still be underway, so compare race counts before interpreting a trend. Pit events begin in the modern pit-source era (2011); tyre stints and sampled weather are much newer (2023 onward).
+            """),
             code("""
             display(coverage)
-            ax = coverage.sort_values("earliest_season").plot.barh(
-                x="table", y="row_count", figsize=(10, 4), legend=False, color="#e10600"
+            spans = coverage.dropna(subset=['earliest_season', 'latest_season']).copy()
+            spans['earliest_season'] = pd.to_numeric(spans.earliest_season)
+            spans['latest_season'] = pd.to_numeric(spans.latest_season)
+            fig, ax = plt.subplots(figsize=(10, max(3, len(spans) * .48)))
+            for y, row in enumerate(spans.itertuples()):
+                ax.plot([row.earliest_season, row.latest_season], [y, y], lw=9, solid_capstyle='round', color='#e10600')
+            ax.set(yticks=range(len(spans)), yticklabels=spans['table'], xlabel='Season', title='Declared availability by table')
+            ax.grid(axis='x', alpha=.25)
+            plt.tight_layout()
+            races_per_season = tables['race_context'].groupby('season').size().rename('races').tail(12)
+            display(races_per_season.to_frame().T)
+            """),
+            md("""
+            ## 4. Join recipe: race context → driver entries
+
+            This is the base table for driver-level questions. `validate='many_to_one'` raises an error if a race key is repeated on the context side. Check unmatched rows and row count rather than assuming a successful merge is correct.
+            """),
+            code("""
+            race_key = ['season', 'round_number']
+            context_columns = [c for c in ['season', 'round_number', 'circuit_short_name', 'country_name', 'start_rainfall']
+                               if c in tables['race_context'].columns]
+            driver_view = tables['race_drivers'].merge(
+                tables['race_context'][context_columns], on=race_key, how='left',
+                validate='many_to_one', indicator=True
             )
-            ax.set(title="Published rows by table", xlabel="Rows", ylabel="")
-            plt.tight_layout()
+            print('Driver entries:', len(tables['race_drivers']), '| joined rows:', len(driver_view))
+            display(driver_view['_merge'].value_counts().rename('rows').to_frame())
+            display(driver_view.drop(columns='_merge').head(5))
             """),
-            md("## Key integrity and join map\n\nUse `(season, round_number)` for a race, add `driver_id` for a driver-race, and use `session_key` where modern session-level data provides it."),
+            md("""
+            ## 5. Join recipe: recorded stops per driver
+
+            Count pit events at the **driver-race** grain before joining. A race with no pit-event rows is excluded: its absence could mean the source did not supply data. Within a race that has recorded pit events, an entrant with no matching event gets a zero *recorded* stop count. This is a descriptive view, not a claim that the source captures every real-world stop.
+            """),
             code("""
-            checks = {
-                "race_context unique race": ~tables["race_context"].duplicated(["season", "round_number"]).any(),
-                "race_drivers unique entry": ~tables["race_drivers"].duplicated(["season", "round_number", "driver_id", "car_number"]).any(),
-                "pit_events unique stop": ~tables["pit_events"].duplicated(["season", "round_number", "driver_id", "stop_number"]).any(),
-                "stints unique stint": ~tables["stints"].duplicated(["season", "round_number", "driver_id", "stint_number"]).any(),
-                "all driver races have context": tables["race_drivers"].merge(
-                    tables["race_context"][["season", "round_number"]].drop_duplicates(),
-                    on=["season", "round_number"], how="left", indicator=True
-                )["_merge"].eq("both").all(),
-            }
-            display(pd.Series(checks, name="passed").to_frame())
-            print(f"{sum(checks.values())} of {len(checks)} key and join checks passed")
+            driver_key = ['season', 'round_number', 'driver_id']
+            pit_counts = tables['pit_events'].groupby(driver_key).size().rename('recorded_stops').reset_index()
+            covered_races = pit_counts[race_key].drop_duplicates()
+            entrants = tables['race_drivers'].merge(covered_races, on=race_key, how='inner')
+            stops_view = entrants.merge(pit_counts, on=driver_key, how='left', validate='many_to_one')
+            stops_view['recorded_stops'] = stops_view['recorded_stops'].fillna(0).astype(int)
+            print('Races with pit records:', len(covered_races), '| driver entries in those races:', len(stops_view))
+            display(stops_view.groupby('season').agg(races=('round_number', 'nunique'),
+                                                     entrants=('driver_id', 'size'),
+                                                     mean_recorded_stops=('recorded_stops', 'mean')).tail(10))
             """),
-            md("## Missingness is meaningful\n\nThe chart below highlights columns whose availability is tied to a source era. Read `coverage.csv` and the dictionary before imputing values."),
+            md("""
+            ## 6. Missing values need a reason
+
+            Missingness may reflect an entire source era, an unavailable race, or a field missing within an otherwise covered record. These cases need different treatment. The table below compares missing rates within seasons; choose a field in `column_to_check` to inspect its pattern. Read its dictionary description and `coverage.csv` before filling values.
+            """),
             code("""
-            missing = pd.concat({name: frame.isna().mean() for name, frame in tables.items()}).rename("missing_rate")
-            missing = missing[missing.gt(0)].sort_values(ascending=False).head(25).reset_index()
-            missing.columns = ["table", "column", "missing_rate"]
-            display(missing)
-            plt.figure(figsize=(9, 7))
-            sns.barplot(data=missing, y=missing["table"] + "." + missing["column"], x="missing_rate", color="#3671c6")
-            plt.title("Largest documented missingness rates")
-            plt.xlabel("Fraction missing")
-            plt.ylabel("")
-            plt.tight_layout()
+            column_to_check = 'start_rainfall'
+            frame = tables['race_context']
+            if column_to_check not in frame:
+                print(f'{column_to_check} is absent in this release; choose another race_context column.')
+            else:
+                rates = frame.groupby('season')[column_to_check].agg(
+                    rows='size', missing=lambda values: values.isna().sum(),
+                    missing_rate=lambda values: values.isna().mean()
+                ).reset_index()
+                display(rates.tail(20))
+                ax = rates.plot(x='season', y='missing_rate', figsize=(10, 3.5), legend=False, color='#3671c6')
+                ax.set(ylabel='Fraction missing', ylim=(0, 1), title=f'Missing {column_to_check} by season')
+                plt.tight_layout()
+                display(dictionary[(dictionary['table'] == 'race_context') &
+                                   (dictionary['column'] == column_to_check)])
             """),
-            md("## Quality ledger\n\nEvery normalization or coverage decision is published. `warning` is included but documented; an error would exclude the affected table for that race."),
+            md("""
+            ## 7. Inspect quality decisions and origins
+
+            `data_quality_issues.csv` is a ledger of warnings, errors, and their resolutions. Filter by table or race before using a suspicious value. `provenance.csv`, when included in the release, records where each table/race came from. An issue count measures documented decisions; it is not a score for a driver or team.
+            """),
             code("""
-            display(issues.groupby(["severity", "resolution"], dropna=False).size().rename("issues").reset_index())
-            issues["issue_code"].value_counts().head(12).to_frame("count")
+            display(issues.groupby(['severity', 'affected_table', 'resolution'], dropna=False)
+                    .size().rename('issues').reset_index().sort_values('issues', ascending=False).head(20))
+            display(issues[['season', 'round_number', 'affected_table', 'issue_code', 'issue_message']].tail(8))
+            if provenance is not None:
+                display(provenance.head(8))
+                print('Provenance rows:', len(provenance))
+            else:
+                print('No provenance.csv in this release; consult the dataset card for source details.')
             """),
-            md("## Modeling checklist\n\n- Define the prediction moment first.\n- Use only fields available by that moment.\n- Split chronologically by race or season.\n- Do not interpret absent pre-2011 pit rows as zero stops.\n- Treat 2026 as a partial season until it is complete.\n- Keep targets such as `classified_position` out of predictors."),
+            md("""
+            ## 8. Choose features at the right time
+
+            The dictionary includes `feature_time`, `role`, and `target` where supplied. A pre-race model can use information available before lights out; it cannot use pit visits, final classification, or weather observed later. For an in-race model, specify the decision lap and discard future observations. Split by race or season in chronological order to avoid learning from future races.
+            """),
+            code("""
+            timing_columns = [c for c in ['table', 'column', 'description', 'feature_time', 'role', 'target']
+                              if c in dictionary.columns]
+            focus = ['grid_position', 'classified_position', 'start_rainfall', 'lap_number', 'pit_duration_s']
+            display(dictionary.loc[dictionary['column'].isin(focus), timing_columns].head(25))
+            if 'target' in dictionary:
+                display(dictionary.loc[dictionary['target'].astype(str).str.lower().isin(['true', '1', 'yes']),
+                                       timing_columns].head(20))
+            """),
+            md("""
+            ## 9. Before you publish a chart or model
+
+            - State the unit of analysis: race, driver-race, pit visit, stint, or timestamp.
+            - Restrict to seasons and races where the relevant source is available; show the number of observations.
+            - Validate join cardinality and inspect unmatched keys.
+            - Explain whether a zero was observed or inferred within a covered race.
+            - Check the quality ledger and provenance for the slice you use.
+            - Fix the prediction moment, exclude targets and later events, and split chronologically.
+            - Treat race-start rainfall as a snapshot; it does not describe conditions throughout a race. Associations here do not establish causality.
+
+            **Continue exploring:** [Pit stop and weather](https://www.kaggle.com/code/akashrane2609/f1-pit-stop-trends-and-weather-strategy) · [Tyre stints](https://www.kaggle.com/code/akashrane2609/f1-tyre-stint-strategy-explorer) · [Position strategy](https://www.kaggle.com/code/akashrane2609/f1-leakage-safe-prediction-baselines). Adapt the recipes above to your question, and cite the dataset release used for your result.
+            """),
         ],
     },
     "02_pit_stop_weather": {
