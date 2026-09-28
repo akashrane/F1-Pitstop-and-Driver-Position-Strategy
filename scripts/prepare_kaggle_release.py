@@ -119,12 +119,16 @@ def prepare_release(
     _write_dictionary(destination / "data_dictionary.csv", dictionary_rows)
     _write_readme(destination / "README.md", start_year, end_year, resources)
     current = _read_existing_metadata(existing_metadata)
+    existing_keywords = current.get("keywords") or []
+    default_keywords = ["tabular", "automobiles and vehicles", "sports"]
+    keywords = list(dict.fromkeys([*existing_keywords, *default_keywords]))
     metadata = {
         "id": slug,
         "title": current.get("title", DATASET_TITLE),
         "subtitle": DATASET_SUBTITLE,
         "description": DATASET_DESCRIPTION,
         "expectedUpdateFrequency": "weekly",
+        "keywords": keywords,
         "resources": resources,
     }
     (destination / "dataset-metadata.json").write_text(
